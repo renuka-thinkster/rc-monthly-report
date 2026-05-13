@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rolling Crunchys — Monthly Report 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b;
+    --brand:#7c2d12; --brand2:#b45309; --brand3:#f59e0b;
+    --good:#16a34a; --bad:#dc2626; --info:#0ea5e9;
+    --row:#fafaf9; --row2:#fef3c7; --line:#e7e5e4;
+    --derived:#ecfeff; --manual:#fefce8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);color:var(--ink);min-height:100vh}
+  header{background:linear-gradient(90deg,#7c2d12 0%,#b45309 50%,#f59e0b 100%);color:white;padding:16px 22px;box-shadow:0 4px 12px rgba(0,0,0,.15);position:sticky;top:0;z-index:100}
+  header h1{margin:0;font-size:21px;letter-spacing:.5px}
+  header .sub{font-size:12px;opacity:.92;margin-top:3px}
+  .container{max-width:1400px;margin:0 auto;padding:14px}
+  .card{background:#ffffff;border-radius:12px;padding:16px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:14px}
+  .tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:2px solid var(--line);margin-bottom:12px}
+  .tab{padding:9px 13px;cursor:pointer;border:none;background:transparent;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;font-size:13px;transition:all .15s;white-space:nowrap}
+  .tab:hover{color:var(--brand)}
+  .tab.active{color:var(--brand);border-bottom-color:var(--brand)}
+  .tab.section-head{color:var(--brand);font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.6px;cursor:default;border-bottom:none;padding-right:6px;padding-left:14px}
+  .panel{display:none}
+  .panel.active{display:block;animation:fadeIn .2s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .toolbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .btn{padding:8px 13px;border:none;border-radius:7px;font-weight:600;cursor:pointer;font-size:12.5px;transition:transform .1s, box-shadow .1s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 4px 8px rgba(0,0,0,.1)}
+  .btn-primary{background:var(--brand);color:white}
+  .btn-secondary{background:#e7e5e4;color:var(--ink)}
+  .btn-wa{background:#25D366;color:white}
+  .btn-link{background:#0ea5e9;color:white}
+  .btn-danger{background:#fee2e2;color:var(--bad)}
+  select,input[type="number"],input[type="text"],input.numinput{padding:6px 9px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;font-family:inherit}
+  input[type="number"]{text-align:right;width:100%;min-width:80px}
+  /* Free-text numeric input — no spinner, no dropdown behavior */
+  input.numinput{text-align:right;width:100%;min-width:80px;-moz-appearance:textfield}
+  input.numinput::-webkit-outer-spin-button,
+  input.numinput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input.numinput:focus{outline:2px solid var(--brand3);outline-offset:-1px;border-color:var(--brand3)}
+  input[type="date"]{padding:5px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px;font-family:inherit}
+  #dailyTable th,#dailyTable td{padding:5px 6px;font-size:12px}
+  #dailyTable input.numinput{min-width:65px;font-size:11.5px;padding:4px 6px}
+  /* Locked rows: subtly greyed inputs, no edit cursor */
+  #dailyTable input:disabled, #dailyTable input[type="date"]:disabled{
+    background:#f3f4f6 !important;color:#475569;cursor:not-allowed;border-color:#e5e7eb;font-weight:600
+  }
+  #dailyTable tr.row-locked td{background:#fafaf9}
+  #dailyTable tr.row-locked td.derived-cell{background:#e0f2fe;color:#155e75}
+  #dailyTable tr.row-past td{background:#f1f5f9}
+  #dailyTable tr.row-past td.derived-cell{background:#dbeafe;color:#1e3a8a}
+  #dailyTable tr.row-past input:disabled{background:#e2e8f0 !important;color:#334155}
+  /* Locked month rows in Sales / Monthly Input */
+  tr.row-locked-month td{background:#f8fafc}
+  tr.row-locked-month input:disabled{background:#e2e8f0 !important;color:#334155;cursor:not-allowed}
+  /* Globally style disabled numinputs (for Inventory, Purchase, Targets which don't use row-classes) */
+  input.numinput:disabled{background:#e2e8f0 !important;color:#334155;cursor:not-allowed;border-color:#cbd5e1}
+  /* ----- Login overlay ----- */
+  #loginOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#7c2d12 0%,#b45309 50%,#f59e0b 100%);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px}
+  #loginOverlay.hidden{display:none}
+  .login-box{background:white;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+  .login-box h2{margin:0 0 4px;color:var(--brand);font-size:22px}
+  .login-box .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .login-box label{display:block;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--ink)}
+  .login-box input[type="email"], .login-box input[type="password"]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;font-size:14px;margin-top:4px;font-family:inherit}
+  .login-box input:focus{outline:2px solid var(--brand3);border-color:var(--brand3)}
+  .login-box .row{display:flex;gap:8px;margin-top:14px}
+  .login-box .row .btn{flex:1;padding:10px}
+  .login-msg{padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px}
+  .login-msg.err{background:#fee2e2;color:var(--bad)}
+  .login-msg.info{background:#dbeafe;color:#1e40af}
+  .login-msg.ok{background:#dcfce7;color:var(--good)}
+  /* Auth tab tables */
+  #panel-auth table{margin-bottom:14px}
+  #panel-auth h4{color:var(--brand);margin:14px 0 6px;font-size:14px}
+  #dailyTable tr.row-editing td{background:#fffbeb}
+  #dailyTable tr.row-editing td.derived-cell{background:#ecfeff}
+  .lock-badge{font-size:10px;opacity:.7}
+  /* Today's KPI card highlight */
+  .today-card{background:linear-gradient(135deg,#fff 0%,#dcfce7 100%);border-left:4px solid var(--good)}
+  .today-card.today-missed{background:linear-gradient(135deg,#fff 0%,#fee2e2 100%);border-left:4px solid var(--bad)}
+  .today-unit-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center}
+  .today-unit-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .today-unit-value{font-size:16px;font-weight:700;color:var(--brand);margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;text-align:right;border:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{background:#fef3c7;font-weight:700;color:#7c2d12;position:sticky;top:0;z-index:5}
+  tbody tr:nth-child(even){background:var(--row)}
+  tbody tr:hover{background:#fff7ed}
+  .total-row td{background:#fff7ed !important;font-weight:700;border-top:2px solid var(--brand)}
+  .month-band td{background:#7c2d12 !important;color:white;font-weight:700;font-size:11px;letter-spacing:.4px;text-transform:uppercase;text-align:left}
+  .grid{display:grid;gap:12px}
+  .grid-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .grid-3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .grid-2{grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}
+  .kpi{background:linear-gradient(135deg,#fff 0%,#fef3c7 100%);border-radius:11px;padding:13px;border-left:4px solid var(--brand)}
+  .kpi-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .kpi-value{font-size:21px;font-weight:700;color:var(--ink);margin-top:3px}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .chart-wrap{position:relative;height:260px}
+  .badge-good{color:var(--good);font-weight:700}
+  .badge-bad{color:var(--bad);font-weight:700}
+  .small{font-size:11px;color:var(--muted)}
+  .help{background:#eff6ff;border-left:3px solid #0ea5e9;padding:9px 13px;border-radius:5px;font-size:12px;color:#075985;margin-bottom:10px}
+  .help b{color:#0c4a6e}
+  .derived-cell{background:var(--derived);color:#155e75;font-weight:600}
+  .manual-cell input{background:var(--manual)}
+  .scroll-x{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:white}
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
+  .modal.show{display:flex}
+  .modal-body{background:white;border-radius:12px;padding:18px;max-width:600px;width:100%;max-height:85vh;overflow:auto}
+  .modal h3{margin-top:0;color:var(--brand)}
+  textarea{width:100%;min-height:160px;padding:10px;border:1px solid var(--line);border-radius:6px;font-family:monospace;font-size:11px;resize:vertical}
+  .copy-row{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:8px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:4px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
+  .section-title{display:flex;align-items:center;gap:8px;color:var(--brand);font-weight:800;font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.6px}
+  .section-title:before{content:"";width:4px;height:18px;background:var(--brand);border-radius:2px}
+  .formula-note{background:#fffbeb;border:1px dashed #f59e0b;padding:8px 11px;border-radius:6px;font-size:11.5px;color:#78350f;margin-bottom:8px}
+  @media print{header,.tabs,.toolbar{display:none}.panel{display:block !important}}
+  @media (max-width:640px){
+    table{font-size:11px}
+    th,td{padding:5px 4px}
+    .container{padding:8px}
+    header h1{font-size:16px}
+    .kpi-value{font-size:18px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============== LOGIN OVERLAY ============== -->
+<div id="loginOverlay" class="hidden">
+  <div class="login-box">
+    <h2>🥨 Rolling Crunchys</h2>
+    <div class="sub" id="loginSub">Sign in to access the monthly report</div>
+    <div id="loginMsg"></div>
+    <form id="loginForm" onsubmit="return false">
+      <label>Email
+        <input type="email" id="loginEmail" autocomplete="email" required/>
+      </label>
+      <label id="passwordLabel">Password
+        <input type="password" id="loginPassword" autocomplete="current-password" required/>
+      </label>
+      <label id="passwordConfirmLabel" style="display:none">Confirm Password
+        <input type="password" id="loginPasswordConfirm" autocomplete="new-password"/>
+      </label>
+      <div class="row">
+        <button type="submit" class="btn btn-primary" onclick="handleLoginSubmit()">Login</button>
+      </div>
+      <p class="small" style="margin-top:12px;color:var(--muted)">
+        First time? Enter the email your admin authorized and you'll be prompted to set a password.<br/>
+        No admin yet? The first account you create becomes admin.
+      </p>
+    </form>
+  </div>
+</div>
+
+
+<header>
+  <h1>🥨 Rolling Crunchys — Monthly Report 2026</h1>
+  <div class="sub">RC Month Report (input) → Monthly Input (derived + manual) → Yearly Summary &amp; Dashboard</div>
+</header>
+
+<div class="container">
+
+  <!-- TOOLBAR -->
+  <div class="card">
+    <div class="toolbar">
+      <label class="small" style="display:flex;align-items:center;gap:5px">Year:
+        <select id="yearSelect" onchange="switchYear(this.value)" style="font-weight:700"></select>
+      </label>
+      <button class="btn btn-secondary" onclick="addYear()" title="Add a new year (e.g., 2027)">+ Year</button>
+      <span id="userBadge" class="small" style="padding:4px 9px;background:#fef3c7;border-radius:6px;display:none"></span>
+      <button class="btn btn-primary" onclick="saveAll()">💾 Save</button>
+      <button class="btn btn-secondary" onclick="exportJSON()">⬇️ Export JSON</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆️ Import JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)"/>
+      <button class="btn btn-wa" onclick="shareWhatsAppText()">💬 WA — Text Summary</button>
+      <button class="btn btn-link" onclick="shareWhatsAppLink()">🔗 WA — Data Link</button>
+      <button class="btn btn-secondary" onclick="window.print()">🖨️ Print/PDF</button>
+      <button class="btn btn-secondary" id="globalEditBtn" onclick="toggleEditMode()" title="Unlock past months and saved daily entries for editing"></button>
+      <span id="saveStatus" class="small" style="margin-left:auto"></span>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="card" style="padding-top:6px">
+    <div class="tabs">
+      <button class="tab active" data-tab="db">📊 Dashboard</button>
+      <span class="tab section-head">RC Month Report:</span>
+      <button class="tab" data-tab="rc-sales">① Sales</button>
+      <button class="tab" data-tab="rc-inv">② Inventory</button>
+      <button class="tab" data-tab="rc-pur">③ Purchase</button>
+      <button class="tab" data-tab="rc-fc">④ Food Cost</button>
+      <button class="tab" data-tab="rc-tgt">⑤ Target</button>
+      <span class="tab section-head">Daily:</span>
+      <button class="tab" data-tab="daily">📅 Daily Sales</button>
+      <button class="tab" data-tab="prod">📦 Product Consumption</button>
+      <span class="tab section-head">Derived:</span>
+      <button class="tab" data-tab="mi">Monthly Input</button>
+      <button class="tab" data-tab="ys">Yearly Summary</button>
+      <span class="tab section-head" id="adminSectionLabel" style="display:none">Admin:</span>
+      <button class="tab" data-tab="auth" id="authTabBtn" style="display:none">🛡️ Authorize</button>
+    </div>
+
+    <!-- ============== ① SALES ============== -->
+    <div class="panel" id="panel-rc-sales">
+      <h3 class="section-title">① Total Sales Monthly Report</h3>
+      <div class="help">
+        Per month per store: enter <b>Order Count</b> (Dining, Home Delivery) and <b>Amount</b> (Dining, Home Delivery, Credit Sales, FOC).
+        Total Orders, Avg/day, Row Total and Month Sub-Total are auto-computed.
+      </div>
+      <div class="legend">
+        <span><i style="background:#fef3c7"></i>Manual entry</span>
+        <span><i style="background:#ecfeff"></i>Auto-calculated</span>
+        <span><i style="background:#7c2d12"></i>Month band</span>
+      </div>
+      <div class="scroll-x">
+        <table id="salesTable">
+          <thead>
+            <tr>
+              <th rowspan="2">Store</th>
+              <th colspan="3">Order Count</th>
+              <th rowspan="2">Avg / day</th>
+              <th colspan="5">Amount (₹)</th>
+              <th rowspan="2">Sub-Total<br/>(Month)</th>
+            </tr>
+            <tr>
+              <th>Dining</th><th>Home Delivery</th><th>Total Orders</th>
+              <th>Dining</th><th>Home Delivery</th><th>Credit Sales</th><th>FOC</th>
+              <th>Row Total</th>
+            </tr>
+          </thead>
+          <tbody id="salesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== ② INVENTORY ============== -->
+    <div class="panel" id="panel-rc-inv">
+      <h3 class="section-title">② Inventory — Opening &amp; Closing</h3>
+      <div class="help">Per site × per month: enter Starting and Closing Inventory value (₹). Total row is auto-summed.</div>
+      <div class="scroll-x">
+        <table id="invTable">
+          <thead>
+            <tr id="invMonthRow"><th rowspan="2">Site Name</th></tr>
+            <tr id="invSubRow"></tr>
+          </thead>
+          <tbody id="invBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== ③ PURCHASE ============== -->
+    <div class="panel" id="panel-rc-pur">
+      <h3 class="section-title">③ Total Value of New Purchase</h3>
+      <div class="help">Enter Total New Purchase value (₹) per month.</div>
+      <div class="scroll-x">
+        <table id="purTable">
+          <thead><tr id="purHead"></tr></thead>
+          <tbody>
+            <tr id="purBody"></tr>
+            <tr id="purActions" style="background:#fffbeb"></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="formula-note" style="margin-top:10px">
+        <b>Note:</b> Purchase data flows into Food Cost calculation and Monthly Input.
+      </div>
+    </div>
+
+    <!-- ============== ④ FOOD COST (auto-derived) ============== -->
+    <div class="panel" id="panel-rc-fc">
+      <h3 class="section-title">④ Actual Food Cost &amp; % Food Cost</h3>
+      <div class="formula-note">
+        <b>Actual Food Cost</b> = Starting Inventory + Total Value of New Purchase − Ending Inventory<br/>
+        <b>% Food Cost</b> = Actual Food Cost × 100 / Sales (Turnover)
+      </div>
+      <div class="help">All values below are <b>auto-derived</b> from sheets ②③ and ① (no manual entry).</div>
+      <div class="scroll-x">
+        <table id="fcTable">
+          <thead>
+            <tr id="fcMonthRow"></tr>
+            <tr id="fcSubRow"></tr>
+          </thead>
+          <tbody>
+            <tr id="fcBody"></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== ⑤ TARGET ============== -->
+    <div class="panel" id="panel-rc-tgt">
+      <h3 class="section-title">⑤ Target — by Site</h3>
+      <div class="help">
+        Set monthly <b>Target</b> &amp; <b>Working Days</b> per site. Pick the <b>As-of date</b> to see cumulative progress up to that day.<br/>
+        <b>Achieved</b> = sum of Daily Sales entries on/before the As-of date (in the selected month). <i>Events</i> falls back to the monthly Sales sub-total.<br/>
+        <b>Day Target</b> = Target ÷ Working Days · <b>Per Day Sales</b> = Achieved ÷ Days Entered · <b>% Achieved</b> = Achieved × 100 ÷ Target · <b>% Day Target</b> = Achieved × 100 ÷ (Day Target × Days Entered) — i.e., on-pace measure (100% = exactly on track).
+      </div>
+      <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label class="small">Month for Target view:</label>
+        <select id="targetMonthPicker" onchange="renderTargets()"></select>
+        <label class="small" style="display:flex;align-items:center;gap:5px">As of date:
+          <input type="date" id="targetAsOfDate" onchange="renderTargets()" style="padding:5px 7px;font-size:12px"/>
+        </label>
+        <button class="btn btn-secondary" id="copyPrevTargetBtn" onclick="copyPreviousTarget()" style="padding:5px 11px;font-size:12px" title="Copy target & working days from the previous month"></button>
+      </div>
+      <div class="scroll-x">
+      <table>
+        <thead>
+          <tr><th>Site Name</th><th>Target (₹)</th><th>Achieved (₹)</th><th>Working Days</th><th>Days Entered</th><th>Day Target</th><th>Per Day Sales</th><th>% Achieved</th><th>% Day Target</th></tr>
+        </thead>
+        <tbody id="targetBody"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <!-- ============== DAILY SALES (date-wise, payment-mode breakdown) ============== -->
+    <div class="panel" id="panel-daily">
+      <h3 class="section-title">📅 Daily Sales — Unit-wise (date × payment mode)</h3>
+      <div class="help">
+        Track daily turnover per unit broken down by payment method. Sub-total and Avg/day update automatically.
+        <b>Δ vs Target</b> column shows daily achievement against the Per-Day Target (green = above, red = below).
+      </div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <label class="small">Per-Day Target ₹:
+          <input type="text" inputmode="decimal" class="numinput" id="dailyTargetInput" style="width:120px"/>
+        </label>
+        <button class="btn btn-primary" onclick="addDailyRow()">+ Add Day</button>
+        <button class="btn btn-secondary" id="editModeBtn" onclick="toggleEditMode()" title="Unlock past saved entries to edit them"></button>
+        <span class="small" style="margin-left:auto" id="dailyCountInfo"></span>
+      </div>
+      <div id="editModeBanner" class="help" style="background:#fef3c7;border-left-color:#f59e0b;color:#7c2d12;display:none">
+        <b>🔓 Edit Mode is ON.</b> Past saved entries can now be edited. Click <b>🔒 Done Editing</b> when finished to re-lock everything.
+      </div>
+      <div class="scroll-x">
+        <table id="dailyTable">
+          <thead>
+            <tr>
+              <th rowspan="2">Date</th>
+              <th rowspan="2">Day</th>
+              <th colspan="4">Café</th>
+              <th colspan="3">RC Express</th>
+              <th colspan="3">Truck</th>
+              <th colspan="3">TCS</th>
+              <th colspan="3">RCF</th>
+              <th rowspan="2">All Total</th>
+              <th rowspan="2">Δ vs Target</th>
+              <th rowspan="2"></th>
+            </tr>
+            <tr>
+              <th>UPI</th><th>Online</th><th>Cash</th><th>Total</th>
+              <th>UPI</th><th>Cash</th><th>Total</th>
+              <th>UPI</th><th>Cash</th><th>Total</th>
+              <th>TCS-1</th><th>TCS-2</th><th>Total</th>
+              <th>UPI</th><th>Cash</th><th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="dailyBody"></tbody>
+          <tfoot>
+            <tr class="total-row" id="dailySubTotalRow"></tr>
+            <tr id="dailyAvgRow" style="background:#fffbeb;font-weight:700"></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== PRODUCT CONSUMPTION ============== -->
+    <div class="panel" id="panel-prod">
+      <h3 class="section-title">📦 Product Consumption Report</h3>
+      <div class="help">
+        Track each product's consumption per month. <b>Consumed</b> = Opening + Received − Closing. <b>Value</b> = Consumed × Rate ₹/unit.<br/>
+        Click <b>+ Add Product</b> to add a new item. Existing products can be renamed or removed (delete clears all months for that product).
+        Lock state follows the same per-month Save/Edit rule as other tabs.
+      </div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <label class="small" style="display:flex;align-items:center;gap:5px">Month:
+          <select id="prodMonthPicker" onchange="renderProducts()"></select>
+        </label>
+        <span id="prodLockStatus" class="small" style="margin-left:6px"></span>
+        <span id="prodLockAction" style="margin-left:6px"></span>
+        <button class="btn btn-primary" onclick="addProduct()" style="margin-left:auto">+ Add Product</button>
+      </div>
+      <div class="scroll-x">
+        <table id="prodTable">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Unit</th>
+              <th>Opening</th>
+              <th>Received</th>
+              <th>Closing</th>
+              <th>Consumed</th>
+              <th>Rate ₹</th>
+              <th>Value ₹</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="prodBody"></tbody>
+          <tfoot><tr class="total-row" id="prodTotalRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== MONTHLY INPUT (derived + manual) ============== -->
+    <div class="panel" id="panel-mi">
+      <h3 class="section-title">Monthly Input — Derived &amp; Manual</h3>
+      <div class="help">
+        <b>Sales, Purchase, Food Cost</b> are auto-derived from RC Month Report (sheets ①②③④).
+        <b>Staff Food, Dump, Maintenance, Other Income</b> are entered manually here.
+      </div>
+      <div class="legend">
+        <span><i style="background:#ecfeff"></i>Auto-derived (from RC sheets)</span>
+        <span><i style="background:#fefce8"></i>Manual entry</span>
+      </div>
+      <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Sales</th>
+            <th>Purchase</th>
+            <th>Food Cost</th>
+            <th>Staff Food</th>
+            <th>Dump</th>
+            <th>Maintenance</th>
+            <th>Other Income</th>
+            <th>Net Profit (Est.)</th>
+          </tr>
+        </thead>
+        <tbody id="miBody"></tbody>
+        <tfoot><tr class="total-row" id="miTotalRow"></tr></tfoot>
+      </table>
+      </div>
+    </div>
+
+    <!-- ============== YEARLY SUMMARY ============== -->
+    <div class="panel" id="panel-ys">
+      <h3 class="section-title">Yearly Summary</h3>
+      <div class="help">
+        Aggregates from the source nodes — <b>Sales</b> from the Sales sub-total, <b>Purchase</b> from the Purchase node, <b>Food Cost</b> from the Actual FC formula (Start Inv + Purchase − Close Inv).
+        <br/>Year 2026 defaults to <b>start from May</b> (Jan-Apr is historical seed). Use the Start From picker below to change.
+      </div>
+      <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label class="small">Start from:</label>
+        <select id="ysStartPicker" onchange="setSummaryStartMonth(this.value)"></select>
+        <span id="ysRangeNote" class="small" style="color:var(--muted)"></span>
+      </div>
+
+      <div id="ysSummaryGrid" class="grid grid-3" style="margin-bottom:14px"></div>
+
+      <h4 style="margin:8px 0 6px;color:var(--brand)">Key KPIs</h4>
+      <div class="grid grid-4" id="ysKpiGrid"></div>
+
+      <h4 style="margin:14px 0 6px;color:var(--brand)">Year-wise Cumulative</h4>
+      <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th><th>Sales</th><th>Purchase</th><th>Food Cost</th>
+            <th>Staff Food</th><th>Dump</th><th>Maintenance</th><th>Other Income</th><th>Net Profit (Est.)</th>
+          </tr>
+        </thead>
+        <tbody id="ysBody"></tbody>
+        <tfoot><tr class="total-row" id="ysTotalRow"></tr></tfoot>
+      </table>
+      </div>
+    </div>
+
+    <!-- ============== DASHBOARD ============== -->
+    <div class="panel active" id="panel-db">
+      <h3 class="section-title">Dashboard — Visual KPIs</h3>
+      <div class="help">Live charts driven by your entered data. Reflects current values across all months.</div>
+      <div id="dbHeadKPIs" class="grid grid-4" style="margin-bottom:14px"></div>
+
+      <!-- TODAY'S SALES SECTION -->
+      <div class="card" id="todayCard" style="margin-bottom:14px;padding:14px">
+        <h4 style="margin:0 0 10px;color:var(--brand);display:flex;align-items:center;gap:8px">
+          📍 Today's Sales — <span id="todayDate" style="color:var(--ink);font-weight:600"></span>
+        </h4>
+        <div id="todayUnitsGrid" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:12px"></div>
+        <div id="todaySummaryGrid" class="grid grid-3"></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">📅 Day-wise Sales vs Target</h4>
+          <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">Monthly Sales (₹)</h4>
+          <div class="chart-wrap"><canvas id="chartSales"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">Sales · Food Cost · Net Profit (line)</h4>
+          <div class="chart-wrap"><canvas id="chartProfit"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">% Food Cost — month over month</h4>
+          <div class="chart-wrap"><canvas id="chartFCpct"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">YTD Sales by Store</h4>
+          <div class="chart-wrap"><canvas id="chartStore"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">Inventory: Total Value (Open vs Close)</h4>
+          <div class="chart-wrap"><canvas id="chartInv"></canvas></div>
+        </div>
+        <div class="card" style="margin:0">
+          <h4 style="margin:0 0 8px">Cost Composition (YTD)</h4>
+          <div class="chart-wrap"><canvas id="chartCostMix"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== AUTHORIZE (admin only) ============== -->
+    <div class="panel" id="panel-auth">
+      <h3 class="section-title">🛡️ User Management</h3>
+      <div class="help">
+        Two ways to add users:<br/>
+        <b>① Create User</b> — admin sets the email + password directly (account is ready immediately).<br/>
+        <b>② Invite by Email</b> — admin authorizes an email; the user picks their own password on first login.<br/>
+        <b>Note:</b> only admins see this tab. Static-HTML auth is workflow-only; for real security with shared data, deploy the Next.js + Neon version.
+      </div>
+
+      <!-- ① Create User (admin sets password) -->
+      <h4>① Create User <span class="small" style="font-weight:normal;color:var(--muted)">— admin sets email &amp; password</span></h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:center;max-width:760px">
+        <input type="email" id="createUserEmail" placeholder="email@example.com" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px"/>
+        <input type="password" id="createUserPassword" placeholder="password" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px"/>
+        <select id="createUserRole" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+        <button class="btn btn-primary" onclick="createUser()">+ Create User</button>
+      </div>
+
+      <!-- ② Invite by Email -->
+      <h4>② Invite by Email <span class="small" style="font-weight:normal;color:var(--muted)">— user picks password on first login</span></h4>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="email" id="authNewEmail" placeholder="email@example.com" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;min-width:240px"/>
+        <button class="btn btn-secondary" onclick="addAuthorizedEmail()">+ Authorize</button>
+      </div>
+
+      <h4>Pending Authorizations <span class="small" style="font-weight:normal;color:var(--muted)">(email approved, password not set yet)</span></h4>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>Email</th><th style="text-align:right">Action</th></tr></thead>
+          <tbody id="authPendingBody"></tbody>
+        </table>
+      </div>
+
+      <h4>Registered Users <span class="small" style="font-weight:normal;color:var(--muted)">— delete, reset password, or toggle admin</span></h4>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>Email</th><th>Role</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="authUsersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- WhatsApp Modals -->
+<div class="modal" id="linkModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-body">
+    <h3>📲 Shareable Data Link</h3>
+    <p class="small">Encodes all your RC data into a URL. Whoever opens the link sees the same interactive report with your numbers.</p>
+    <textarea id="shareLinkBox" readonly></textarea>
+    <div class="copy-row">
+      <button class="btn btn-primary" onclick="copyShareLink()">📋 Copy Link</button>
+      <button class="btn btn-wa" onclick="openWAWithLink()">💬 Open WhatsApp</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+    <p class="small" style="margin-top:8px"><b>Tip:</b> If the link is too long, paste it into a notes app first or use the "WA — Text Summary" button.</p>
+  </div>
+</div>
+<div class="modal" id="textModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-body">
+    <h3>💬 WhatsApp Text Summary</h3>
+    <p class="small">Editable preview. Pick the month from the dropdown then send.</p>
+    <div style="margin:6px 0 8px">
+      <label class="small">Month: </label>
+      <select id="waMonthPicker" onchange="rebuildSummaryText()"></select>
+    </div>
+    <textarea id="shareTextBox" style="min-height:260px"></textarea>
+    <div class="copy-row">
+      <button class="btn btn-wa" onclick="openWAWithText()">💬 Send via WhatsApp</button>
+      <button class="btn btn-secondary" onclick="copyText()">📋 Copy Text</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====================================================================== */
+/*  CONSTANTS                                                              */
+/* ====================================================================== */
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// Current calendar month/year auto-detected from today's date.
+const CURRENT_MONTH = MONTHS[new Date().getMonth()];
+const CURRENT_YEAR = new Date().getFullYear();
+// Lock status for a month: "editing" | "saved" | "readonly".
+//   editing  → inputs enabled, "💾 Save" button visible
+//   saved    → inputs disabled, "✏️ Edit" button visible (per-month explicit lock)
+//   readonly → inputs disabled, "🔒 read-only" text (auto-locked past data; needs global Edit Mode to change)
+function monthLockStatus(m){
+  if (state.editMode) return "editing";
+  if (state.locks && state.locks[m] === true) return "saved";
+  const y = state.currentYear;
+  if (y > CURRENT_YEAR) return "editing";              // future year
+  if (y < CURRENT_YEAR) return "readonly";              // past year
+  return MONTHS.indexOf(m) < MONTHS.indexOf(CURRENT_MONTH) ? "readonly" : "editing";
+}
+function isMonthLocked(m){ return monthLockStatus(m) !== "editing"; }
+function toggleMonthLock(m){
+  const s = monthLockStatus(m);
+  if (s === "editing"){
+    state.locks[m] = true;       // Save & lock
+  } else if (s === "saved"){
+    delete state.locks[m];        // Unlock → revert to auto-rule
+  }
+  // 'readonly' can't toggle inline — needs global Edit Mode
+  saveAll();
+}
+// Previous month relative to a given (month, year). January rolls back to Dec of previous year.
+function previousMonthOf(m, year){
+  const idx = MONTHS.indexOf(m);
+  if (idx <= 0) return { m: "Dec", year: year - 1 };
+  return { m: MONTHS[idx - 1], year };
+}
+// Copy target + workingDays from previous month into the currently-selected Target month.
+function copyPreviousTarget(){
+  const sel = document.getElementById("targetMonthPicker");
+  const m = sel?.value || MONTHS[0];
+  if (isMonthLocked(m)){
+    alert(`${m} is locked. Click ✏️ Edit (or 🔓 Edit Past Data for auto-locked months) before copying.`);
+    return;
+  }
+  const prev = previousMonthOf(m, state.currentYear);
+  const srcYearData = state.years[prev.year];
+  if (!srcYearData){
+    alert(`No data for ${prev.year} yet. Add that year first via the + Year button.`);
+    return;
+  }
+  const srcTgt = srcYearData.rc && srcYearData.rc.tgt && srcYearData.rc.tgt[prev.m];
+  if (!srcTgt){
+    alert(`No target data found in ${prev.m} ${prev.year}.`);
+    return;
+  }
+  // Check if anything to copy
+  let anyNonZero = false;
+  STORES.forEach(s => {
+    if (srcTgt[s] && (num(srcTgt[s].target) || num(srcTgt[s].workingDays))) anyNonZero = true;
+  });
+  if (!anyNonZero){
+    alert(`${prev.m} ${prev.year} has no target data entered yet. Enter targets there first.`);
+    return;
+  }
+  if (!confirm(`Copy ${prev.m} ${prev.year} targets → ${m} ${state.currentYear}?\n\nThis overwrites any existing target & working-days values for ${m}.`)) return;
+  STORES.forEach(s => {
+    state.rc.tgt[m][s] = {
+      target: num(srcTgt[s] && srcTgt[s].target) || 0,
+      workingDays: num(srcTgt[s] && srcTgt[s].workingDays) || 30
+    };
+  });
+  flash(`✓ Copied targets from ${prev.m} ${prev.year}`);
+  saveAll();
+}
+function monthActionBtn(m){
+  const s = monthLockStatus(m);
+  if (s === "editing"){
+    return `<button class="btn btn-primary" style="padding:3px 9px;font-size:11px" onclick="toggleMonthLock('${m}')" title="Save & lock this month">💾 Save</button>`;
+  }
+  if (s === "saved"){
+    return `<button class="btn btn-secondary" style="padding:3px 9px;font-size:11px" onclick="toggleMonthLock('${m}')" title="Unlock this month to edit">✏️ Edit</button>`;
+  }
+  return `<span class="small" style="color:var(--muted)" title="Past month — use 🔓 Edit Past Data to modify">🔒 read-only</span>`;
+}
+const STORES = ["RC Express","Food Truck","Café","TCS","Events"];
+const INV_SITES = ["Store","Food Truck","Rolling Express","TCS","Café & Kitchen"];
+const DAYS_IN_MONTH = {Jan:31,Feb:28,Mar:31,Apr:30,May:31,Jun:30,Jul:31,Aug:31,Sep:30,Oct:31,Nov:30,Dec:31};
+
+/* ====================================================================== */
+/*  DATA MODEL                                                             */
+/* ====================================================================== */
+function blankSalesRow(){return {dineOrders:0,hdOrders:0,dineAmt:0,hdAmt:0,creditAmt:0,focAmt:0};}
+function blankInvRow(){return {start:0,close:0};}
+
+function blankRC(){
+  const sales={}, inv={}, pur={}, tgt={};
+  MONTHS.forEach(m=>{
+    sales[m]={}; STORES.forEach(s=> sales[m][s]=blankSalesRow());
+    inv[m]={};   INV_SITES.forEach(s=> inv[m][s]=blankInvRow());
+    pur[m]=0;
+    tgt[m]={}; STORES.forEach(s=> tgt[m][s]={target:0, workingDays:30});
+  });
+  return {sales, inv, pur, tgt};
+}
+function blankManual(){
+  const x={}; MONTHS.forEach(m=> x[m]={staffFood:0, dump:0, maintenance:0, otherIncome:0});
+  return x;
+}
+
+/* ====================================================================== */
+/*  SEED DATA — Jan-Apr 2026 from your two uploaded files                  */
+/* ====================================================================== */
+function seedData(){
+  const rc = blankRC();
+  const mn = blankManual();
+
+  // ---- SALES ----
+  rc.sales.Jan["RC Express"] = {dineOrders:41, hdOrders:0, dineAmt:75656, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Jan["Food Truck"] = {dineOrders:607, hdOrders:0, dineAmt:131977, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Jan["Café"]       = {dineOrders:2249, hdOrders:494, dineAmt:1897836, hdAmt:298506, creditAmt:0, focAmt:0};
+  rc.sales.Jan["TCS"]        = {dineOrders:0, hdOrders:0, dineAmt:362122, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Jan["Events"]     = {dineOrders:0, hdOrders:0, dineAmt:0, hdAmt:0, creditAmt:0, focAmt:0};
+
+  rc.sales.Feb["RC Express"] = {dineOrders:0, hdOrders:0, dineAmt:88951, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Feb["Food Truck"] = {dineOrders:870, hdOrders:0, dineAmt:180784, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Feb["Café"]       = {dineOrders:1955, hdOrders:551, dineAmt:1676205, hdAmt:295219, creditAmt:0, focAmt:0};
+  rc.sales.Feb["TCS"]        = {dineOrders:0, hdOrders:0, dineAmt:357776, hdAmt:0, creditAmt:0, focAmt:0};
+
+  rc.sales.Mar["RC Express"] = {dineOrders:0, hdOrders:0, dineAmt:97162, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Mar["Food Truck"] = {dineOrders:891, hdOrders:0, dineAmt:157063, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Mar["Café"]       = {dineOrders:2209, hdOrders:634, dineAmt:2099602, hdAmt:367248, creditAmt:0, focAmt:0};
+  rc.sales.Mar["TCS"]        = {dineOrders:0, hdOrders:0, dineAmt:389996, hdAmt:0, creditAmt:0, focAmt:0};
+
+  rc.sales.Apr["RC Express"] = {dineOrders:523, hdOrders:0, dineAmt:118102, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Apr["Food Truck"] = {dineOrders:717, hdOrders:0, dineAmt:173860, hdAmt:0, creditAmt:0, focAmt:0};
+  rc.sales.Apr["Café"]       = {dineOrders:2151, hdOrders:435, dineAmt:2098826, hdAmt:256613, creditAmt:0, focAmt:0};
+  rc.sales.Apr["TCS"]        = {dineOrders:0, hdOrders:0, dineAmt:459902, hdAmt:0, creditAmt:0, focAmt:0};
+
+  // ---- INVENTORY ----
+  rc.inv.Jan["Store"]={start:178548,close:139856};
+  rc.inv.Jan["Food Truck"]={start:2110,close:6845};
+  rc.inv.Jan["Rolling Express"]={start:1750,close:2675};
+  rc.inv.Jan["TCS"]={start:5985,close:6132};
+  rc.inv.Jan["Café & Kitchen"]={start:32154,close:18546};
+
+  rc.inv.Feb["Store"]={start:139856,close:189546};
+  rc.inv.Feb["Food Truck"]={start:6845,close:5914};
+  rc.inv.Feb["Rolling Express"]={start:2675,close:2548};
+  rc.inv.Feb["TCS"]={start:6132,close:5982};
+  rc.inv.Feb["Café & Kitchen"]={start:18546,close:26854};
+
+  rc.inv.Mar["Store"]={start:189546,close:128596};
+  rc.inv.Mar["Food Truck"]={start:5914,close:6475};
+  rc.inv.Mar["Rolling Express"]={start:2548,close:3658};
+  rc.inv.Mar["TCS"]={start:5982,close:4958};
+  rc.inv.Mar["Café & Kitchen"]={start:26854,close:21352};
+
+  rc.inv.Apr["Store"]={start:128596,close:182654};
+  rc.inv.Apr["Food Truck"]={start:6475,close:7565};
+  rc.inv.Apr["Rolling Express"]={start:3658,close:5987};
+  rc.inv.Apr["TCS"]={start:4958,close:532};
+  rc.inv.Apr["Café & Kitchen"]={start:21352,close:29876};
+
+  // ---- PURCHASE ----
+  rc.pur.Jan = 939559;
+  rc.pur.Feb = 1004521;
+  rc.pur.Mar = 1085751;
+  rc.pur.Apr = 1193185;
+
+  // ---- TARGET (uses snapshot from Apr Target sheet, applied to Jan-Apr) ----
+  ["Jan","Feb","Mar","Apr"].forEach(m=>{
+    rc.tgt[m]["RC Express"] = {target:165000, workingDays:28};
+    rc.tgt[m]["Food Truck"] = {target:270000, workingDays:25};
+    rc.tgt[m]["Café"]       = {target:1170000, workingDays:31};
+    rc.tgt[m]["TCS"]        = {target:420000, workingDays:21};
+    rc.tgt[m]["Events"]     = {target:0, workingDays:0};
+  });
+
+  // ---- MANUAL FIELDS (from Monthly Input file) ----
+  mn.Jan = {staffFood:65199, dump:2871, maintenance:109960, otherIncome:0};
+  mn.Feb = {staffFood:65199, dump:3175, maintenance:114754, otherIncome:0};
+  mn.Mar = {staffFood:65199, dump:4185, maintenance:103254, otherIncome:0};
+  mn.Apr = {staffFood:65199, dump:5134, maintenance:247542, otherIncome:0};
+
+  return {rc, mn};
+}
+
+/* ====================================================================== */
+/*  STATE                                                                  */
+/* ====================================================================== */
+const STORE_KEY = "rc_monthly_2026_v4";
+// state.years[year] = { rc, mn, daily }
+// state.rc / state.mn / state.daily are rebound aliases to the current year's data.
+let state = {
+  currentYear: 2026,
+  years: {},
+  editMode: false,
+  auth: { users:{}, authorizedEmails:[], session:null },
+  // Aliases set by bindYear()
+  year: 2026, rc: null, mn: null, daily: null
+};
+function defaultProducts2026(){
+  return [
+    {id:"p_chicken", name:"Chicken",     unit:"kg"},
+    {id:"p_paneer",  name:"Paneer",      unit:"kg"},
+    {id:"p_oil",     name:"Cooking Oil", unit:"L"},
+    {id:"p_flour",   name:"Flour",       unit:"kg"},
+    {id:"p_onion",   name:"Onion",       unit:"kg"},
+    {id:"p_tomato",  name:"Tomato",      unit:"kg"}
+  ];
+}
+function makeYearData(y){
+  if (y === 2026){
+    const seed = seedData();
+    // 2026 seed: Jan-Apr already "saved" (locked); current month & future open
+    const locks = { Jan:true, Feb:true, Mar:true, Apr:true };
+    return { rc: seed.rc, mn: seed.mn, daily: seedDaily(), locks,
+             products: defaultProducts2026(), consumption: {} };
+  }
+  // Blank rc/mn for non-seed years (no pre-filled data, no locks)
+  return {
+    rc: blankRC(),
+    mn: (function(){ const x={}; MONTHS.forEach(m=> x[m]={staffFood:0,dump:0,maintenance:0,otherIncome:0}); return x; })(),
+    daily: { perDayTarget: 107000, entries: [] },
+    locks: {},
+    products: [],
+    consumption: {}
+  };
+}
+function bindYear(y){
+  if (!state.years[y]) state.years[y] = makeYearData(y);
+  if (!state.years[y].locks) state.years[y].locks = {};
+  if (!state.years[y].products) state.years[y].products = y === 2026 ? defaultProducts2026() : [];
+  if (!state.years[y].consumption) state.years[y].consumption = {};
+  state.currentYear = y;
+  state.year = y;
+  state.rc = state.years[y].rc;
+  state.mn = state.years[y].mn;
+  state.daily = state.years[y].daily;
+  state.locks = state.years[y].locks;
+  state.products = state.years[y].products;
+  state.consumption = state.years[y].consumption;
+}
+function switchYear(y){
+  bindYear(+y);
+  saveAll();
+}
+function addYear(){
+  const next = Math.max(...Object.keys(state.years).map(n=>+n)) + 1;
+  const y = prompt("Add year (e.g., " + next + "):", String(next));
+  if (y === null) return;
+  const yn = +y;
+  if (!yn || yn < 2000 || yn > 2100){ alert("Invalid year"); return; }
+  if (state.years[yn]){ alert("Year already exists"); switchYear(yn); return; }
+  state.years[yn] = makeYearData(yn);
+  switchYear(yn);
+}
+
+/* ----- Daily Sales model ----- */
+const DAILY_UNITS = ["cafe","rcExpress","truck","tcs","rcf"];
+const DAILY_UNIT_LABELS = { cafe:"Café", rcExpress:"RC Express", truck:"Truck", tcs:"TCS", rcf:"RCF" };
+function blankDailyEntry(dateStr){
+  return {
+    date: dateStr || "",
+    cafe: {upi:0, online:0, cash:0},
+    rcExpress: {upi:0, cash:0},
+    truck: {upi:0, cash:0},
+    tcs: {t1:0, t2:0},
+    rcf: {upi:0, cash:0},
+    locked: false
+  };
+}
+function blankDaily(){ return { perDayTarget: 107000, editMode: false, entries: [] }; }
+function seedDaily(){
+  return {
+    perDayTarget: 107000,
+    editMode: false,
+    entries: [
+      {date:"2026-05-01", cafe:{upi:65420,online:9876,cash:13009}, rcExpress:{upi:3150,cash:1330},  truck:{upi:7820,cash:0},   tcs:{t1:0,t2:0},      rcf:{upi:16651,cash:1215}, locked:true},
+      {date:"2026-05-02", cafe:{upi:66294,online:8452,cash:9684},  rcExpress:{upi:4592,cash:1144},  truck:{upi:5581,cash:0},   tcs:{t1:0,t2:0},      rcf:{upi:9769,cash:1461},  locked:true},
+      {date:"2026-05-03", cafe:{upi:107636,online:11569,cash:8631},rcExpress:{upi:3614,cash:1450},  truck:{upi:9236,cash:700}, tcs:{t1:0,t2:0},      rcf:{upi:15888,cash:1066}, locked:true},
+      {date:"2026-05-04", cafe:{upi:39175,online:9506,cash:9351},  rcExpress:{upi:2953,cash:390},   truck:{upi:8350,cash:0},   tcs:{t1:13434,t2:0},  rcf:{upi:5758,cash:883},   locked:true},
+      {date:"2026-05-05", cafe:{upi:59955,online:9687,cash:17987}, rcExpress:{upi:3350,cash:1020},  truck:{upi:2484,cash:0},   tcs:{t1:19738,t2:0},  rcf:{upi:6847,cash:847},   locked:true},
+      {date:"2026-05-06", cafe:{upi:68999,online:3740,cash:10372}, rcExpress:{upi:1670,cash:780},   truck:{upi:0,cash:0},      tcs:{t1:18459,t2:0},  rcf:{upi:7816,cash:752},   locked:true},
+      {date:"2026-05-07", cafe:{upi:52521,online:3262,cash:11642}, rcExpress:{upi:4732,cash:730},   truck:{upi:6262,cash:0},   tcs:{t1:17402,t2:0},  rcf:{upi:9226,cash:1394},  locked:true},
+      {date:"2026-05-08", cafe:{upi:65992,online:6673,cash:6315},  rcExpress:{upi:2805,cash:450},   truck:{upi:11546,cash:0},  tcs:{t1:20332,t2:0},  rcf:{upi:15106,cash:885},  locked:true},
+      {date:"2026-05-09", cafe:{upi:88696,online:6026,cash:9309},  rcExpress:{upi:4584,cash:990},   truck:{upi:4738,cash:0},   tcs:{t1:0,t2:0},      rcf:{upi:13008,cash:2609}, locked:true},
+      {date:"2026-05-10", cafe:{upi:88979,online:8287,cash:16434}, rcExpress:{upi:4784,cash:780},   truck:{upi:0,cash:0},      tcs:{t1:0,t2:0},      rcf:{upi:15779,cash:1931}, locked:true}
+    ]
+  };
+}
+
+function loadState(){
+  // 1) Shared link via hash
+  if (location.hash.startsWith("#d=")) {
+    try{
+      const compressed = decodeURIComponent(location.hash.slice(3));
+      const json = LZString.decompressFromEncodedURIComponent(compressed);
+      const parsed = JSON.parse(json);
+      ingestParsed(parsed);
+      flash("✓ Loaded shared data from link");
+      return;
+    }catch(e){ console.warn("hash decode failed",e) }
+  }
+  // 2) localStorage
+  const raw = localStorage.getItem(STORE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      ingestParsed(parsed);
+      return;
+    } catch(e){}
+  }
+  // 3) Fresh — seed with 2026
+  state.years = { 2026: makeYearData(2026) };
+  bindYear(2026);
+  state.auth = { users:{}, authorizedEmails:[], session:null };
+  state.editMode = false;
+}
+function ingestParsed(parsed){
+  state.auth = parsed.auth || { users:{}, authorizedEmails:[], session:null };
+  state.editMode = !!parsed.editMode;
+  if (parsed.years && typeof parsed.years === "object" && Object.keys(parsed.years).length){
+    state.years = parsed.years;
+    bindYear(+(parsed.currentYear || parsed.year || 2026));
+  } else if (parsed.rc) {
+    // Legacy single-year format → migrate into years map
+    const y = parsed.year || 2026;
+    state.years = {};
+    state.years[y] = { rc: parsed.rc, mn: parsed.mn || {}, daily: parsed.daily || seedDaily() };
+    bindYear(y);
+  } else {
+    state.years = { 2026: makeYearData(2026) };
+    bindYear(2026);
+  }
+  if (!state.years[2026]) state.years[2026] = makeYearData(2026);
+  // Drop legacy field
+  Object.values(state.years).forEach(y => { if (y.daily && y.daily.editMode !== undefined) delete y.daily.editMode; });
+}
+/* Snapshot which input is focused so we can restore it after re-render. */
+function snapshotFocus(){
+  const fa = document.activeElement;
+  if (!fa || fa.tagName !== "INPUT") return null;
+  const p = fa.closest(".panel");
+  if (!p) return null;
+  const snap = {
+    panelId: p.id,
+    m: fa.dataset.m || "",
+    s: fa.dataset.s || "",
+    f: fa.dataset.f || "",
+    ss: 0, se: 0
+  };
+  try { snap.ss = fa.selectionStart; snap.se = fa.selectionEnd; } catch(e) {}
+  return snap;
+}
+function restoreFocus(snap){
+  if (!snap) return;
+  const panel = document.getElementById(snap.panelId);
+  if (!panel) return;
+  const esc = v => v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const parts = ["input"];
+  if (snap.m) parts.push(`[data-m="${esc(snap.m)}"]`);
+  if (snap.s) parts.push(`[data-s="${esc(snap.s)}"]`);
+  if (snap.f) parts.push(`[data-f="${esc(snap.f)}"]`);
+  const target = panel.querySelector(parts.join(""));
+  if (target) {
+    target.focus();
+    try {
+      // place cursor at end if selection unavailable
+      const len = target.value.length;
+      const ss = Math.min(snap.ss ?? len, len);
+      const se = Math.min(snap.se ?? len, len);
+      target.setSelectionRange(ss, se);
+    } catch(e) {}
+  }
+}
+
+/* Debounced render so rapid typing stays smooth and the cursor never jumps out. */
+let _renderTimer = null;
+function saveAll(silent){
+  localStorage.setItem(STORE_KEY, JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode, auth:state.auth}));
+  if (!silent) flash("✓ Saved");
+  if (_renderTimer) clearTimeout(_renderTimer);
+  _renderTimer = setTimeout(() => {
+    const snap = snapshotFocus();
+    refreshAll();
+    restoreFocus(snap);
+  }, 180);
+}
+function flash(msg){
+  const el = document.getElementById("saveStatus");
+  el.textContent = msg;
+  setTimeout(()=>{ el.textContent = ""; }, 2200);
+}
+
+/* ====================================================================== */
+/*  HELPERS                                                                */
+/* ====================================================================== */
+const num = v => {
+  if (v === null || v === undefined || v === "") return 0;
+  const s = String(v).replace(/[,\s₹]/g, "").trim();
+  const n = +s;
+  return isFinite(n) ? n : 0;
+};
+const fmt = n => "₹" + Math.round(num(n)).toLocaleString("en-IN");
+const fmt0 = n => Math.round(num(n)).toLocaleString("en-IN");
+const pct = (a,b)=> num(b)? ((num(a)*100)/num(b)).toFixed(2)+"%" : "—";
+
+/* ====================================================================== */
+/*  CORE COMPUTATIONS  (the data flow)                                     */
+/* ====================================================================== */
+// SALES — derived from RC sheet ①
+function storeRowTotal(m,s){
+  const x = state.rc.sales[m][s];
+  return num(x.dineAmt)+num(x.hdAmt)+num(x.creditAmt)+num(x.focAmt);
+}
+function storeRowOrders(m,s){
+  const x = state.rc.sales[m][s];
+  return num(x.dineOrders)+num(x.hdOrders);
+}
+function monthSalesTotal(m){
+  let t=0; STORES.forEach(s=> t+=storeRowTotal(m,s)); return t;
+}
+
+// INVENTORY — derived from RC sheet ②
+function monthInvStart(m){ let t=0; INV_SITES.forEach(s=> t+=num(state.rc.inv[m][s].start)); return t; }
+function monthInvClose(m){ let t=0; INV_SITES.forEach(s=> t+=num(state.rc.inv[m][s].close)); return t; }
+
+// FOOD COST — derived from ②③①
+function monthFoodCost(m){ return monthInvStart(m) + num(state.rc.pur[m]) - monthInvClose(m); }
+function monthFoodCostPct(m){ const s=monthSalesTotal(m); return s? (monthFoodCost(m)*100/s) : 0; }
+
+// MONTHLY INPUT — feeds Yearly Summary
+function monthRow(m){
+  const sales = monthSalesTotal(m);
+  const purchase = num(state.rc.pur[m]);
+  const fc = monthFoodCost(m);
+  const sf = num(state.mn[m].staffFood);
+  const dump = num(state.mn[m].dump);
+  const mt = num(state.mn[m].maintenance);
+  const oi = num(state.mn[m].otherIncome);
+  const np = sales - purchase - fc - sf - dump - mt + oi;
+  // Note: original "Net Profit" formula from Yearly_Summary was Sales - (Purchase+FoodCost+StaffFood+Dump+Maint) + OI
+  return {sales, purchase, fc, sf, dump, mt, oi, np};
+}
+
+/* ====================================================================== */
+/*  RENDER — ① SALES                                                        */
+/* ====================================================================== */
+function renderSales(){
+  const tbody = document.getElementById("salesBody");
+  let html = "";
+  MONTHS.forEach(m=>{
+    const subTot = monthSalesTotal(m);
+    const locked = isMonthLocked(m);
+    const dis = locked ? "disabled" : "";
+    const bandLock = locked ? ' <span class="lock-badge">🔒 read-only</span>' : ' <span class="lock-badge" style="color:#86efac">✏️ editable</span>';
+    html += `<tr class="month-band"><td colspan="11">
+        <span style="float:right;display:inline-flex;align-items:center;gap:6px;font-weight:normal;text-transform:none">${monthActionBtn(m)}</span>
+        ${m} ${state.year}  ·  Sub-Total: ${fmt(subTot)}${bandLock}
+      </td></tr>`;
+    STORES.forEach(s=>{
+      const x = state.rc.sales[m][s];
+      const totalOrders = storeRowOrders(m,s);
+      const rowTotal = storeRowTotal(m,s);
+      const days = DAYS_IN_MONTH[m] || 30;
+      const avg = days? (totalOrders/days).toFixed(2) : "0";
+      const trCls = locked ? "row-locked-month" : "";
+      html += `<tr class="${trCls}">
+        <td><b>${s}</b></td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.dineOrders}" data-m="${m}" data-s="${s}" data-f="dineOrders" ${dis}/></td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.hdOrders}" data-m="${m}" data-s="${s}" data-f="hdOrders" ${dis}/></td>
+        <td class="derived-cell">${fmt0(totalOrders)}</td>
+        <td class="derived-cell">${avg}</td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.dineAmt}" data-m="${m}" data-s="${s}" data-f="dineAmt" ${dis}/></td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.hdAmt}" data-m="${m}" data-s="${s}" data-f="hdAmt" ${dis}/></td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.creditAmt}" data-m="${m}" data-s="${s}" data-f="creditAmt" ${dis}/></td>
+        <td><input type="text" inputmode="decimal" class="numinput" value="${x.focAmt}" data-m="${m}" data-s="${s}" data-f="focAmt" ${dis}/></td>
+        <td class="derived-cell"><b>${fmt(rowTotal)}</b></td>
+        <td class="derived-cell">${s===STORES[0] ? "<b>"+fmt(subTot)+"</b>" : ""}</td>
+      </tr>`;
+    });
+  });
+  tbody.innerHTML = html;
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const m=e.target.dataset.m, s=e.target.dataset.s, f=e.target.dataset.f;
+      state.rc.sales[m][s][f] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+}
+
+/* ====================================================================== */
+/*  RENDER — ② INVENTORY                                                    */
+/* ====================================================================== */
+function renderInventory(){
+  const monthRowEl = document.getElementById("invMonthRow");
+  const subRowEl = document.getElementById("invSubRow");
+  // Build header with lock badge
+  let mh = "<th rowspan=\"2\">Site Name</th>";
+  let sh = "";
+  MONTHS.forEach(m=>{
+    const locked = isMonthLocked(m);
+    const tag = locked ? ' 🔒' : ' ✏️';
+    mh += `<th colspan="2"${locked?' style="background:#e2e8f0;color:#475569"':''}>${m} ${state.year}${tag}</th>`;
+    sh += `<th${locked?' style="background:#e2e8f0"':''}>Start</th><th${locked?' style="background:#e2e8f0"':''}>Close</th>`;
+  });
+  monthRowEl.innerHTML = mh;
+  subRowEl.innerHTML = sh;
+  // Body
+  const body = document.getElementById("invBody");
+  let html = "";
+  INV_SITES.forEach(s=>{
+    html += `<tr><td><b>${s}</b></td>`;
+    MONTHS.forEach(m=>{
+      const dis = isMonthLocked(m) ? "disabled" : "";
+      const x = state.rc.inv[m][s];
+      html += `<td><input type="text" inputmode="decimal" class="numinput" value="${x.start}" data-m="${m}" data-s="${s}" data-f="start" ${dis}/></td>`;
+      html += `<td><input type="text" inputmode="decimal" class="numinput" value="${x.close}" data-m="${m}" data-s="${s}" data-f="close" ${dis}/></td>`;
+    });
+    html += `</tr>`;
+  });
+  // Total Inventory Value row
+  html += `<tr class="total-row"><td>Total Inventory Value</td>`;
+  MONTHS.forEach(m=>{
+    html += `<td class="derived-cell">${fmt(monthInvStart(m))}</td>`;
+    html += `<td class="derived-cell">${fmt(monthInvClose(m))}</td>`;
+  });
+  html += `</tr>`;
+  // Per-month action row
+  html += `<tr style="background:#fffbeb"><td><b>Action</b></td>`;
+  MONTHS.forEach(m=>{
+    html += `<td colspan="2" style="text-align:center">${monthActionBtn(m)}</td>`;
+  });
+  html += `</tr>`;
+  body.innerHTML = html;
+  body.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const m=e.target.dataset.m, s=e.target.dataset.s, f=e.target.dataset.f;
+      state.rc.inv[m][s][f] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+}
+
+/* ====================================================================== */
+/*  RENDER — ③ PURCHASE                                                     */
+/* ====================================================================== */
+function renderPurchase(){
+  const head = document.getElementById("purHead");
+  const body = document.getElementById("purBody");
+  const actions = document.getElementById("purActions");
+  let h = ""; let b = ""; let a = "";
+  MONTHS.forEach(m=>{
+    const locked = isMonthLocked(m);
+    const tag = locked ? ' 🔒' : ' ✏️';
+    h += `<th${locked?' style="background:#e2e8f0;color:#475569"':''}>${m} ${state.year}${tag}</th>`;
+  });
+  MONTHS.forEach(m=>{
+    const dis = isMonthLocked(m) ? "disabled" : "";
+    b += `<td><input type="text" inputmode="decimal" class="numinput" value="${state.rc.pur[m]}" data-m="${m}" ${dis}/></td>`;
+    a += `<td style="text-align:center">${monthActionBtn(m)}</td>`;
+  });
+  // Add a YTD total cell at the end
+  let total = 0; MONTHS.forEach(m=> total += num(state.rc.pur[m]));
+  h += `<th>YTD Total</th>`;
+  b += `<td class="derived-cell"><b>${fmt(total)}</b></td>`;
+  a += `<td></td>`;
+  head.innerHTML = h;
+  body.innerHTML = b;
+  if (actions) actions.innerHTML = a;
+  body.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const m=e.target.dataset.m;
+      state.rc.pur[m] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+}
+
+/* ====================================================================== */
+/*  RENDER — ④ FOOD COST (auto)                                             */
+/* ====================================================================== */
+function renderFoodCost(){
+  const monthRowEl = document.getElementById("fcMonthRow");
+  const subRowEl = document.getElementById("fcSubRow");
+  const body = document.getElementById("fcBody");
+  let mh = ""; let sh = ""; let b = "";
+  MONTHS.forEach(m=>{
+    mh += `<th colspan="2">${m} ${state.year}</th>`;
+    sh += `<th>Actual FC (₹)</th><th>% FC</th>`;
+    const fc = monthFoodCost(m); const p = monthFoodCostPct(m);
+    b += `<td class="derived-cell">${fmt(fc)}</td><td class="derived-cell">${p? p.toFixed(2)+"%" : "—"}</td>`;
+  });
+  // YTD
+  let totFC=0, totSales=0;
+  MONTHS.forEach(m=>{ totFC += monthFoodCost(m); totSales += monthSalesTotal(m); });
+  mh += `<th colspan="2">YTD</th>`;
+  sh += `<th>Actual FC</th><th>% FC</th>`;
+  b += `<td class="derived-cell"><b>${fmt(totFC)}</b></td><td class="derived-cell"><b>${pct(totFC,totSales)}</b></td>`;
+  monthRowEl.innerHTML = mh;
+  subRowEl.innerHTML = sh;
+  body.innerHTML = b;
+}
+
+/* ====================================================================== */
+/*  RENDER — ⑤ TARGET                                                       */
+/* ====================================================================== */
+function renderTargets(){
+  const sel = document.getElementById("targetMonthPicker");
+  if (!sel.options.length){
+    sel.innerHTML = MONTHS.map(m=>`<option value="${m}">${m} ${state.year}</option>`).join("");
+  }
+  const m = sel.value || MONTHS[0];
+  const tbody = document.getElementById("targetBody");
+  let html = "";
+  const dis = isMonthLocked(m) ? "disabled" : "";
+
+  // --- As-of date picker setup ---
+  const monthIdx = MONTHS.indexOf(m);
+  const lastDayNum = new Date(state.currentYear, monthIdx+1, 0).getDate();
+  const minDate = `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-01`;
+  const maxDate = `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDayNum).padStart(2,"0")}`;
+  const dateInput = document.getElementById("targetAsOfDate");
+  if (dateInput){
+    let asOf = dateInput.value;
+    if (!asOf || asOf < minDate || asOf > maxDate) asOf = defaultTargetAsOfDate(m);
+    dateInput.min = minDate;
+    dateInput.max = maxDate;
+    dateInput.value = asOf;
+  }
+  const asOfDate = dateInput ? dateInput.value : defaultTargetAsOfDate(m);
+  const daysEntered = daysEnteredInMonth(m, asOfDate);
+
+  STORES.forEach(s=>{
+    const t = state.rc.tgt[m][s];
+    const ach = storeAchievedFromDaily(m, s, asOfDate);
+    const dayT = num(t.workingDays)? (num(t.target)/num(t.workingDays)) : 0;
+    const perDay = daysEntered > 0 ? (ach / daysEntered) : 0;
+    const p = num(t.target)? (ach*100/num(t.target)) : 0;
+    // On-pace measure: Achieved vs the cumulative day target up to "as-of"
+    const cumDayTarget = dayT * daysEntered;
+    const pDay = cumDayTarget > 0 ? (ach * 100 / cumDayTarget) : 0;
+    const cls = p>=100? "badge-good" : p>=70? "" : "badge-bad";
+    const clsDay = pDay>=100? "badge-good" : pDay>=70? "" : "badge-bad";
+    const noDailyMap = STORE_TO_DAILY_UNIT[s] === null;
+    const srcNote = noDailyMap ? ' <span class="small" style="color:var(--muted)" title="No Daily Sales mapping — using monthly Sales total">(monthly)</span>' : '';
+    html += `<tr>
+      <td><b>${s}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${t.target}" data-m="${m}" data-s="${s}" data-f="target" ${dis}/></td>
+      <td class="derived-cell">${fmt(ach)}${srcNote}</td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${t.workingDays}" data-m="${m}" data-s="${s}" data-f="workingDays" ${dis}/></td>
+      <td class="derived-cell">${daysEntered}</td>
+      <td class="derived-cell">${fmt(dayT)}</td>
+      <td class="derived-cell">${fmt(perDay)}</td>
+      <td class="derived-cell ${cls}">${num(t.target)? p.toFixed(1)+"%" : "—"}</td>
+      <td class="derived-cell ${clsDay}">${cumDayTarget>0 ? pDay.toFixed(1)+"%" : "—"}</td>
+    </tr>`;
+  });
+  // Show status + per-month Save/Edit button next to the month dropdown
+  if (sel.parentElement && !sel.parentElement.querySelector(".lock-status")){
+    const note = document.createElement("span");
+    note.className = "small lock-status";
+    note.style.marginLeft = "10px";
+    sel.parentElement.appendChild(note);
+  }
+  if (sel.parentElement && !sel.parentElement.querySelector(".lock-action")){
+    const wrap = document.createElement("span");
+    wrap.className = "lock-action";
+    wrap.style.marginLeft = "10px";
+    sel.parentElement.appendChild(wrap);
+  }
+  const note = sel.parentElement.querySelector(".lock-status");
+  const action = sel.parentElement.querySelector(".lock-action");
+  const status = monthLockStatus(m);
+  if (note){
+    if (status === "editing")  note.innerHTML = '✏️ <span style="color:#16a34a">Editable</span>';
+    else if (status === "saved") note.innerHTML = '💾 <span style="color:#7c2d12">Saved (click Edit to change)</span>';
+    else                          note.innerHTML = '🔒 <span style="color:#dc2626">Past — use 🔓 Edit Past Data</span>';
+  }
+  if (action) action.innerHTML = monthActionBtn(m);
+
+  // Update Copy Previous Month button label and enabled state
+  const copyBtn = document.getElementById("copyPrevTargetBtn");
+  if (copyBtn){
+    const prev = previousMonthOf(m, state.currentYear);
+    copyBtn.innerHTML = `📋 Copy from ${prev.m} ${prev.year}`;
+    copyBtn.disabled = isMonthLocked(m);
+  }
+  tbody.innerHTML = html;
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const m=e.target.dataset.m, s=e.target.dataset.s, f=e.target.dataset.f;
+      state.rc.tgt[m][s][f] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+}
+
+/* ====================================================================== */
+/*  RENDER — MONTHLY INPUT                                                 */
+/* ====================================================================== */
+function renderMonthlyInput(){
+  const tbody = document.getElementById("miBody");
+  let html = "";
+  let tS=0,tP=0,tF=0,tSF=0,tD=0,tM=0,tOI=0,tNP=0;
+  MONTHS.forEach(m=>{
+    const r = monthRow(m);
+    tS+=r.sales; tP+=r.purchase; tF+=r.fc; tSF+=r.sf; tD+=r.dump; tM+=r.mt; tOI+=r.oi; tNP+=r.np;
+    const dis = isMonthLocked(m) ? "disabled" : "";
+    const tag = isMonthLocked(m) ? ' 🔒' : ' ✏️';
+    const trCls = isMonthLocked(m) ? "row-locked-month" : "";
+    html += `<tr class="${trCls}">
+      <td><b>${m}${tag}</b></td>
+      <td class="derived-cell">${fmt(r.sales)}</td>
+      <td class="derived-cell">${fmt(r.purchase)}</td>
+      <td class="derived-cell">${fmt(r.fc)}</td>
+      <td class="manual-cell"><input type="text" inputmode="decimal" class="numinput" value="${state.mn[m].staffFood}" data-m="${m}" data-f="staffFood" ${dis}/></td>
+      <td class="manual-cell"><input type="text" inputmode="decimal" class="numinput" value="${state.mn[m].dump}" data-m="${m}" data-f="dump" ${dis}/></td>
+      <td class="manual-cell"><input type="text" inputmode="decimal" class="numinput" value="${state.mn[m].maintenance}" data-m="${m}" data-f="maintenance" ${dis}/></td>
+      <td class="manual-cell"><input type="text" inputmode="decimal" class="numinput" value="${state.mn[m].otherIncome}" data-m="${m}" data-f="otherIncome" ${dis}/></td>
+      <td class="derived-cell ${r.np>=0?'badge-good':'badge-bad'}">${fmt(r.np)}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  document.getElementById("miTotalRow").innerHTML = `
+    <td>TOTAL ${state.year}</td>
+    <td>${fmt(tS)}</td><td>${fmt(tP)}</td><td>${fmt(tF)}</td>
+    <td>${fmt(tSF)}</td><td>${fmt(tD)}</td><td>${fmt(tM)}</td><td>${fmt(tOI)}</td>
+    <td class="${tNP>=0?'badge-good':'badge-bad'}">${fmt(tNP)}</td>`;
+  tbody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const m=e.target.dataset.m, f=e.target.dataset.f;
+      state.mn[m][f] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+}
+
+/* ====================================================================== */
+/*  RENDER — YEARLY SUMMARY                                                */
+/* ====================================================================== */
+function renderYearly(){
+  // Populate "Start From" picker for the CURRENT year (other years use their own stored value)
+  const startPicker = document.getElementById("ysStartPicker");
+  if (startPicker){
+    startPicker.innerHTML = MONTHS.map(m =>
+      `<option value="${m}" ${m===getSummaryStartMonth()?"selected":""}>${m}</option>`
+    ).join("");
+  }
+  const months = summaryMonths();
+  const rangeNote = document.getElementById("ysRangeNote");
+  if (rangeNote){
+    rangeNote.textContent = `Current year (${state.currentYear}) covers ${months[0]}–${months[months.length-1]}  (${months.length} months). Other years use their own start month.`;
+  }
+
+  // Year-wise rows — one per year that exists
+  const years = Object.keys(state.years).map(n => +n).sort((a,b) => a - b);
+  let body = "";
+  const g = {sales:0,purchase:0,fc:0,sf:0,dump:0,mt:0,oi:0,np:0};
+  years.forEach(y => {
+    const t = yearTotals(y);
+    Object.keys(g).forEach(k => g[k] += t[k]);
+    const range = yearRangeLabel(y);
+    body += `<tr>
+      <td><b>${y}</b> <span class="small" style="color:var(--muted)">(${range})</span></td>
+      <td>${fmt(t.sales)}</td><td>${fmt(t.purchase)}</td><td>${fmt(t.fc)}</td>
+      <td>${fmt(t.sf)}</td><td>${fmt(t.dump)}</td><td>${fmt(t.mt)}</td><td>${fmt(t.oi)}</td>
+      <td class="${t.np>=0?'badge-good':'badge-bad'}">${fmt(t.np)}</td>
+    </tr>`;
+  });
+  document.getElementById("ysBody").innerHTML = body || `<tr><td colspan="9" class="small" style="text-align:center;color:var(--muted)">No years yet</td></tr>`;
+  document.getElementById("ysTotalRow").innerHTML = `
+    <td>GRAND TOTAL (all years)</td>
+    <td>${fmt(g.sales)}</td><td>${fmt(g.purchase)}</td><td>${fmt(g.fc)}</td>
+    <td>${fmt(g.sf)}</td><td>${fmt(g.dump)}</td><td>${fmt(g.mt)}</td><td>${fmt(g.oi)}</td>
+    <td class="${g.np>=0?'badge-good':'badge-bad'}">${fmt(g.np)}</td>`;
+
+  // Switch local aliases used by KPI rendering below to grand totals
+  var tS=g.sales, tP=g.purchase, tF=g.fc, tSF=g.sf, tD=g.dump, tM=g.mt, tOI=g.oi, tNP=g.np;
+
+  const opCost = tSF+tD+tM;
+  const grossProfit = tS - tP - tF;
+  const summaryRows = [
+    ["Total Sales", tS, 1],
+    ["Total Purchase", tP, tS? tP/tS : 0],
+    ["Total Food Cost", tF, tS? tF/tS : 0],
+    ["Total Staff Food", tSF, tS? tSF/tS : 0],
+    ["Total Dump / Wastage", tD, tS? tD/tS : 0],
+    ["Total Maintenance", tM, tS? tM/tS : 0],
+    ["Total Other Income", tOI, tS? tOI/tS : 0],
+  ];
+  document.getElementById("ysSummaryGrid").innerHTML = summaryRows.map(([k,v,p])=>`
+    <div class="kpi"><div class="kpi-label">${k}</div>
+      <div class="kpi-value">${fmt(v)}</div>
+      <div class="kpi-sub">${(p*100).toFixed(2)}% of sales</div>
+    </div>`).join("");
+
+  document.getElementById("ysKpiGrid").innerHTML = `
+    <div class="kpi" style="border-left-color:var(--good)"><div class="kpi-label">Gross Profit</div>
+      <div class="kpi-value">${fmt(grossProfit)}</div>
+      <div class="kpi-sub">Sales − Purchase − Food Cost</div></div>
+    <div class="kpi" style="border-left-color:var(--brand2)"><div class="kpi-label">Operating Costs</div>
+      <div class="kpi-value">${fmt(opCost)}</div>
+      <div class="kpi-sub">StaffFood + Dump + Maint</div></div>
+    <div class="kpi" style="border-left-color:var(--info)"><div class="kpi-label">Net Profit (Est.)</div>
+      <div class="kpi-value ${tNP>=0?'badge-good':'badge-bad'}">${fmt(tNP)}</div>
+      <div class="kpi-sub">NP %: ${pct(tNP,tS)}</div></div>
+    <div class="kpi"><div class="kpi-label">Food Cost % of Sales</div>
+      <div class="kpi-value">${pct(tF,tS)}</div>
+      <div class="kpi-sub">YTD weighted</div></div>
+  `;
+}
+
+/* ====================================================================== */
+/*  RENDER — DASHBOARD                                                     */
+/* ====================================================================== */
+const charts = {};
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+/* ====================================================================== */
+/*  RENDER — TODAY'S SECTION on the Dashboard                              */
+/* ====================================================================== */
+function renderTodaySection(){
+  // Today's card only makes sense for the current calendar year
+  const todayCard = document.getElementById("todayCard");
+  if (state.currentYear !== CURRENT_YEAR){
+    if (todayCard) todayCard.style.display = "none";
+    return;
+  }
+  if (todayCard) todayCard.style.display = "";
+  const today = todayLocal(); // YYYY-MM-DD in local-equivalent
+  const entry = (state.daily && state.daily.entries) ? state.daily.entries.find(e => e.date === today) : null;
+  const target = num(state.daily?.perDayTarget);
+  const dateEl = document.getElementById("todayDate");
+  const unitsEl = document.getElementById("todayUnitsGrid");
+  const sumEl = document.getElementById("todaySummaryGrid");
+  // Friendly date: e.g., "Sun, 04 May 2026"
+  let pretty = today;
+  try {
+    const d = new Date(today + "T00:00:00");
+    pretty = d.toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short", year:"numeric" });
+  } catch(e){}
+  dateEl.textContent = pretty;
+
+  if (!entry){
+    unitsEl.innerHTML = `<div class="small" style="grid-column:1/-1;padding:10px">No entry yet for today.
+      <button class="btn btn-primary" style="margin-left:8px;padding:4px 10px;font-size:11px" onclick="addTodayAndGo()">+ Add today's entry</button></div>`;
+    sumEl.innerHTML = "";
+    todayCard.classList.remove("today-missed");
+    return;
+  }
+  const t = dailyEntryTotals(entry);
+  // Per-unit cards
+  const units = [
+    { key:"cafe",      label:"Café",       v: t.cafe },
+    { key:"rcExpress", label:"RC Express", v: t.rcExpress },
+    { key:"truck",     label:"Truck",      v: t.truck },
+    { key:"tcs",       label:"TCS",        v: t.tcs },
+    { key:"rcf",       label:"RCF",        v: t.rcf }
+  ];
+  unitsEl.innerHTML = units.map(u =>
+    `<div class="today-unit-card">
+       <div class="today-unit-label">${u.label}</div>
+       <div class="today-unit-value">${fmt(u.v)}</div>
+     </div>`).join("");
+  // Summary: total / target / missed (or excess)
+  const total = t.all;
+  const missed = target - total;
+  const missedLabel = missed > 0 ? "Missed vs Target" : "Above Target by";
+  const missedCls = missed > 0 ? "badge-bad" : "badge-good";
+  const missedVal = Math.abs(missed);
+  sumEl.innerHTML = `
+    <div class="kpi" style="border-left-color:var(--good)"><div class="kpi-label">Today's Total Sales</div>
+      <div class="kpi-value">${fmt(total)}</div>
+      <div class="kpi-sub">Excludes RCF (matches your sheet)</div></div>
+    <div class="kpi" style="border-left-color:var(--brand2)"><div class="kpi-label">Per-Day Target</div>
+      <div class="kpi-value">${fmt(target)}</div>
+      <div class="kpi-sub">${target>0? ((total*100/target).toFixed(1)+"% achieved") : "Set a target in Daily tab"}</div></div>
+    <div class="kpi" style="border-left-color:${missed>0?'var(--bad)':'var(--good)'}"><div class="kpi-label">${missedLabel}</div>
+      <div class="kpi-value ${missedCls}">${fmt(missedVal)}</div>
+      <div class="kpi-sub">Grand total incl. RCF: ${fmt(t.grand)}</div></div>
+  `;
+  todayCard.classList.toggle("today-missed", missed > 0);
+}
+function addTodayAndGo(){
+  const today = todayLocal();
+  state.daily.entries.push(blankDailyEntry(today));
+  saveAll();
+  // Switch to Daily tab so user can fill it in
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+  document.querySelector('.tab[data-tab="daily"]').classList.add("active");
+  document.getElementById("panel-daily").classList.add("active");
+}
+
+function renderDashboard(){
+  // Head KPIs (YTD)
+  let tS=0,tP=0,tF=0,tNP=0,tSF=0,tD=0,tM=0;
+  MONTHS.forEach(m=>{ const r=monthRow(m); tS+=r.sales; tP+=r.purchase; tF+=r.fc; tNP+=r.np; tSF+=r.sf; tD+=r.dump; tM+=r.mt; });
+  document.getElementById("dbHeadKPIs").innerHTML = `
+    <div class="kpi"><div class="kpi-label">YTD Sales</div><div class="kpi-value">${fmt(tS)}</div></div>
+    <div class="kpi"><div class="kpi-label">YTD Purchase</div><div class="kpi-value">${fmt(tP)}</div><div class="kpi-sub">${pct(tP,tS)}</div></div>
+    <div class="kpi"><div class="kpi-label">YTD Food Cost</div><div class="kpi-value">${fmt(tF)}</div><div class="kpi-sub">FC %: ${pct(tF,tS)}</div></div>
+    <div class="kpi"><div class="kpi-label">YTD Net Profit</div><div class="kpi-value ${tNP>=0?'badge-good':'badge-bad'}">${fmt(tNP)}</div><div class="kpi-sub">NP %: ${pct(tNP,tS)}</div></div>
+  `;
+
+  /* ----- Today's Sales section ----- */
+  renderTodaySection();
+
+  const sales = MONTHS.map(m=> monthSalesTotal(m));
+  const fcs = MONTHS.map(m=> monthFoodCost(m));
+  const nps = MONTHS.map(m=> monthRow(m).np);
+  const fcPct = MONTHS.map((m,i)=> sales[i]? (fcs[i]*100/sales[i]) : 0);
+  const invStart = MONTHS.map(m=> monthInvStart(m));
+  const invClose = MONTHS.map(m=> monthInvClose(m));
+  const storeYTD = STORES.map(s=>{ let t=0; MONTHS.forEach(m=> t+=storeRowTotal(m,s)); return t; });
+
+  destroyChart("chartSales"); destroyChart("chartProfit"); destroyChart("chartFCpct"); destroyChart("chartStore"); destroyChart("chartInv"); destroyChart("chartCostMix"); destroyChart("chartDaily");
+
+  /* ----- Day-wise sales vs target ----- */
+  if (state.daily && state.daily.entries && state.daily.entries.length){
+    const sorted = state.daily.entries.slice().sort((a,b)=> (a.date||"").localeCompare(b.date||""));
+    const labels = sorted.map(e => e.date ? e.date.slice(5) : ""); // MM-DD
+    const dailyVals = sorted.map(e => dailyEntryTotals(e).all);
+    const tgt = num(state.daily.perDayTarget);
+    const tgtLine = sorted.map(()=> tgt);
+    charts.chartDaily = new Chart(document.getElementById("chartDaily"), {
+      data:{ labels, datasets:[
+        { type:"bar", label:"Daily Sales (₹)", data: dailyVals,
+          backgroundColor: dailyVals.map(v => v>=tgt ? "#16a34a" : "#dc2626") },
+        { type:"line", label:"Target (₹)", data: tgtLine,
+          borderColor:"#7c2d12", borderDash:[6,4], backgroundColor:"transparent",
+          pointRadius:0, borderWidth:2 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:"top" } },
+        scales:{ y:{ beginAtZero:true } } }
+    });
+  }
+
+  charts.chartSales = new Chart(document.getElementById("chartSales"), {
+    type:"bar",
+    data:{labels:MONTHS, datasets:[{label:"Sales (₹)", data:sales, backgroundColor:"#f59e0b"}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
+  });
+  charts.chartProfit = new Chart(document.getElementById("chartProfit"), {
+    type:"line",
+    data:{labels:MONTHS, datasets:[
+      {label:"Sales", data:sales, borderColor:"#16a34a", backgroundColor:"transparent", tension:.3},
+      {label:"Food Cost", data:fcs, borderColor:"#dc2626", backgroundColor:"transparent", tension:.3},
+      {label:"Net Profit", data:nps, borderColor:"#0ea5e9", backgroundColor:"transparent", tension:.3},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+  charts.chartFCpct = new Chart(document.getElementById("chartFCpct"), {
+    type:"bar",
+    data:{labels:MONTHS, datasets:[{label:"FC %", data:fcPct, backgroundColor:"#7c2d12"}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+"%"}}}}
+  });
+  charts.chartStore = new Chart(document.getElementById("chartStore"), {
+    type:"doughnut",
+    data:{labels:STORES, datasets:[{data:storeYTD, backgroundColor:["#f59e0b","#16a34a","#0ea5e9","#7c2d12","#a855f7"]}]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+  charts.chartInv = new Chart(document.getElementById("chartInv"), {
+    type:"bar",
+    data:{labels:MONTHS, datasets:[
+      {label:"Starting", data:invStart, backgroundColor:"#bae6fd"},
+      {label:"Closing",  data:invClose, backgroundColor:"#0ea5e9"}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+  charts.chartCostMix = new Chart(document.getElementById("chartCostMix"), {
+    type:"pie",
+    data:{labels:["Purchase","Food Cost","Staff Food","Dump","Maintenance"],
+      datasets:[{data:[tP,tF,tSF,tD,tM],
+        backgroundColor:["#f59e0b","#dc2626","#7c2d12","#a855f7","#0ea5e9"]}]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+}
+
+/* ====================================================================== */
+/*  REFRESH ALL                                                            */
+/* ====================================================================== */
+function refreshAll(){
+  renderYearSelect();
+  renderUserBadge();
+  renderGlobalEditBtn();
+  renderAuthPanel();
+  // Update header subtitle with current year
+  const hdr = document.querySelector("header h1");
+  if (hdr) hdr.innerHTML = `🥨 Rolling Crunchys — Monthly Report ${state.currentYear}`;
+  renderSales();
+  renderInventory();
+  renderPurchase();
+  renderFoodCost();
+  renderTargets();
+  renderDaily();
+  renderProducts();
+  renderMonthlyInput();
+  renderYearly();
+  renderDashboard();
+}
+function renderGlobalEditBtn(){
+  const b = document.getElementById("globalEditBtn");
+  if (!b) return;
+  if (state.editMode){
+    b.innerHTML = "🔒 Done Editing (re-lock all)";
+    b.classList.remove("btn-secondary");
+    b.classList.add("btn-danger");
+  } else {
+    b.innerHTML = "🔓 Edit Past Data";
+    b.classList.remove("btn-danger");
+    b.classList.add("btn-secondary");
+  }
+}
+function renderYearSelect(){
+  const sel = document.getElementById("yearSelect");
+  if (!sel) return;
+  const years = Object.keys(state.years).map(n=>+n).sort((a,b)=>a-b);
+  sel.innerHTML = years.map(y => `<option value="${y}" ${y===state.currentYear?"selected":""}>${y}</option>`).join("");
+}
+function renderUserBadge(){
+  const b = document.getElementById("userBadge");
+  if (!b) return;
+  if (state.auth && state.auth.session){
+    b.style.display = "inline-block";
+    const role = state.auth.session.role;
+    b.innerHTML = `👤 <b>${state.auth.session.email}</b> <span style="color:var(--muted)">(${role})</span> · <a href="#" onclick="logout();return false">Logout</a>`;
+  } else {
+    b.style.display = "none";
+  }
+}
+
+/* ====================================================================== */
+/*  RENDER — DAILY SALES                                                   */
+/* ====================================================================== */
+// Map Target stores → Daily Sales units. "Events" has no daily counterpart.
+const STORE_TO_DAILY_UNIT = {
+  "RC Express": "rcExpress",
+  "Food Truck": "truck",
+  "Café":       "cafe",
+  "TCS":        "tcs",
+  "Events":     null
+};
+// Sum of daily-unit sales for a given store within a given month, optionally filtered to a cutoff date.
+// "Incremental" — grows as each new daily entry is added.
+function storeAchievedFromDaily(m, s, asOfDate){
+  if (!state.daily || !state.daily.entries) return 0;
+  const unit = STORE_TO_DAILY_UNIT[s];
+  if (!unit) return storeRowTotal(m, s);   // Events fallback → monthly Sales total
+  const monthIdx = MONTHS.indexOf(m);
+  let total = 0;
+  state.daily.entries.forEach(e => {
+    if (!e.date) return;
+    if (asOfDate && e.date > asOfDate) return;
+    const eYear  = +e.date.slice(0,4);
+    const eMIdx  = +e.date.slice(5,7) - 1;
+    if (eYear !== state.currentYear || eMIdx !== monthIdx) return;
+    if (unit === "cafe")           total += num(e.cafe.upi) + num(e.cafe.online) + num(e.cafe.cash);
+    else if (unit === "rcExpress") total += num(e.rcExpress.upi) + num(e.rcExpress.cash);
+    else if (unit === "truck")     total += num(e.truck.upi) + num(e.truck.cash);
+    else if (unit === "tcs")       total += num(e.tcs.t1) + num(e.tcs.t2);
+  });
+  return total;
+}
+// Count daily entries within the given month, optionally up to (and including) a cutoff date.
+function daysEnteredInMonth(m, asOfDate){
+  if (!state.daily || !state.daily.entries) return 0;
+  const monthIdx = MONTHS.indexOf(m);
+  return state.daily.entries.filter(e => {
+    if (!e.date) return false;
+    if (asOfDate && e.date > asOfDate) return false;
+    return +e.date.slice(0,4) === state.currentYear && +e.date.slice(5,7) - 1 === monthIdx;
+  }).length;
+}
+// Default "as-of date" for the Target tab when the user hasn't picked one explicitly.
+function defaultTargetAsOfDate(m){
+  const monthIdx = MONTHS.indexOf(m);
+  const lastDayNum = new Date(state.currentYear, monthIdx + 1, 0).getDate();
+  // Current calendar month → today; otherwise last day of the selected month
+  if (state.currentYear === CURRENT_YEAR && monthIdx === new Date().getMonth()){
+    return todayLocal();
+  }
+  return `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDayNum).padStart(2,"0")}`;
+}
+/* ===== Product Consumption ===== */
+function newProductId(){ return "p_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
+function ensureProductMonth(m){
+  const yd = state.years[state.currentYear];
+  if (!yd.consumption) yd.consumption = {};
+  if (!yd.consumption[m]) yd.consumption[m] = {};
+  return yd.consumption[m];
+}
+function consumedQty(rec){
+  return num(rec && rec.opening) + num(rec && rec.received) - num(rec && rec.closing);
+}
+function consumedValue(rec){ return consumedQty(rec) * num(rec && rec.rate); }
+function addProduct(){
+  const yd = state.years[state.currentYear];
+  if (!yd.products) yd.products = [];
+  const name = prompt("Product name (e.g., Onion):");
+  if (!name || !name.trim()) return;
+  const unit = prompt("Unit (kg / L / pcs):", "kg") || "kg";
+  yd.products.push({ id: newProductId(), name: name.trim(), unit: unit.trim() });
+  state.products = yd.products;
+  saveAll();
+}
+function removeProduct(pid){
+  if (!confirm("Remove this product? Its consumption data for ALL months in this year will be deleted.")) return;
+  const yd = state.years[state.currentYear];
+  yd.products = (yd.products || []).filter(p => p.id !== pid);
+  if (yd.consumption){
+    Object.keys(yd.consumption).forEach(m => { if (yd.consumption[m][pid]) delete yd.consumption[m][pid]; });
+  }
+  state.products = yd.products;
+  saveAll();
+}
+function renderProducts(){
+  const sel = document.getElementById("prodMonthPicker");
+  if (!sel) return;
+  // Populate month options (also when year changes)
+  sel.innerHTML = MONTHS.map(m => `<option value="${m}" ${m===(sel.value||CURRENT_MONTH)?"selected":""}>${m} ${state.currentYear}</option>`).join("");
+  const m = sel.value || CURRENT_MONTH;
+  const yd = state.years[state.currentYear];
+  if (!yd.products) yd.products = [];
+  ensureProductMonth(m);
+
+  // Lock status + action
+  const status = monthLockStatus(m);
+  const dis = isMonthLocked(m) ? "disabled" : "";
+  const statusEl = document.getElementById("prodLockStatus");
+  if (statusEl){
+    if (status === "editing")    statusEl.innerHTML = '✏️ <span style="color:#16a34a">Editable</span>';
+    else if (status === "saved") statusEl.innerHTML = '💾 <span style="color:#7c2d12">Saved</span>';
+    else                          statusEl.innerHTML = '🔒 <span style="color:#dc2626">Past — use 🔓 Edit Past Data</span>';
+  }
+  const actionEl = document.getElementById("prodLockAction");
+  if (actionEl) actionEl.innerHTML = monthActionBtn(m);
+
+  // Rows
+  const tbody = document.getElementById("prodBody");
+  if (!yd.products.length){
+    tbody.innerHTML = `<tr><td colspan="9" class="small" style="text-align:center;color:var(--muted);padding:20px">No products yet. Click <b>+ Add Product</b> above to start tracking.</td></tr>`;
+    document.getElementById("prodTotalRow").innerHTML = "";
+    return;
+  }
+  let html = "";
+  let totalValue = 0, totalConsumed = 0;
+  yd.products.forEach(p => {
+    const rec = yd.consumption[m][p.id] || {opening:0, received:0, closing:0, rate:0};
+    const cq = consumedQty(rec);
+    const cv = consumedValue(rec);
+    totalConsumed += cq; totalValue += cv;
+    html += `<tr>
+      <td><input type="text" value="${p.name.replace(/"/g,'&quot;')}" data-pid="${p.id}" data-pf="name" ${dis} style="width:140px;padding:5px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(p.unit||'').replace(/"/g,'&quot;')}" data-pid="${p.id}" data-pf="unit" ${dis} style="width:55px;padding:5px;border:1px solid var(--line);border-radius:4px;font-size:12px;text-align:center"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.opening||0}" data-pid="${p.id}" data-cf="opening" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.received||0}" data-pid="${p.id}" data-cf="received" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.closing||0}" data-pid="${p.id}" data-cf="closing" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(cq)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.rate||0}" data-pid="${p.id}" data-cf="rate" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt(cv)}</b></td>
+      <td>${dis ? '' : `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeProduct('${p.id}')" title="Delete product">🗑️</button>`}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  // Wire input handlers
+  tbody.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", e => {
+      const pid = e.target.dataset.pid;
+      const pf  = e.target.dataset.pf;
+      const cf  = e.target.dataset.cf;
+      if (pf){
+        const p = yd.products.find(x => x.id === pid);
+        if (p) p[pf] = e.target.value;
+      } else if (cf){
+        if (!yd.consumption[m][pid]) yd.consumption[m][pid] = {opening:0, received:0, closing:0, rate:0};
+        yd.consumption[m][pid][cf] = num(e.target.value);
+      }
+      saveAll(true);
+    });
+  });
+  // Total row
+  document.getElementById("prodTotalRow").innerHTML = `
+    <td colspan="5" style="text-align:right">TOTAL — ${yd.products.length} product${yd.products.length===1?"":"s"}</td>
+    <td><b>${fmt0(totalConsumed)}</b></td>
+    <td></td>
+    <td><b>${fmt(totalValue)}</b></td>
+    <td></td>`;
+}
+// Which months count for the Yearly Summary view.
+// Default: 2026 starts at May (Jan-Apr is historical seed); other years start at Jan.
+// User can override per year via the "Start From" picker.
+function defaultSummaryStartMonth(year){
+  return year === 2026 ? "May" : "Jan";
+}
+function getSummaryStartMonth(){
+  const yd = state.years[state.currentYear];
+  if (!yd) return defaultSummaryStartMonth(state.currentYear);
+  return yd.summaryStartMonth || defaultSummaryStartMonth(state.currentYear);
+}
+function summaryMonths(){
+  const start = MONTHS.indexOf(getSummaryStartMonth());
+  return MONTHS.slice(start >= 0 ? start : 0);
+}
+function setSummaryStartMonth(m){
+  state.years[state.currentYear].summaryStartMonth = m;
+  saveAll();
+}
+// Cumulative totals for any year, respecting that year's summaryStartMonth.
+// Uses the same source logic as monthRow() but on yd directly (no need to be the bound currentYear).
+function yearTotals(year){
+  const yd = state.years[year];
+  const t = {sales:0,purchase:0,fc:0,sf:0,dump:0,mt:0,oi:0,np:0};
+  if (!yd) return t;
+  const startM = yd.summaryStartMonth || defaultSummaryStartMonth(year);
+  const startIdx = MONTHS.indexOf(startM);
+  const months = MONTHS.slice(startIdx >= 0 ? startIdx : 0);
+  months.forEach(m => {
+    // Sales (Sales-node sub-total) ─ sum across stores
+    let sales = 0;
+    if (yd.rc && yd.rc.sales && yd.rc.sales[m]){
+      STORES.forEach(s => {
+        const x = yd.rc.sales[m][s];
+        if (x) sales += num(x.dineAmt) + num(x.hdAmt) + num(x.creditAmt) + num(x.focAmt);
+      });
+    }
+    // Purchase (Purchase-node value)
+    const purchase = (yd.rc && yd.rc.pur) ? num(yd.rc.pur[m]) : 0;
+    // Food Cost (Actual FC formula)
+    let invStart = 0, invClose = 0;
+    if (yd.rc && yd.rc.inv && yd.rc.inv[m]){
+      INV_SITES.forEach(site => {
+        const x = yd.rc.inv[m][site];
+        if (x){ invStart += num(x.start); invClose += num(x.close); }
+      });
+    }
+    const fc = invStart + purchase - invClose;
+    // Manual fields (from Monthly Input)
+    const mn = (yd.mn && yd.mn[m]) ? yd.mn[m] : {};
+    const sf = num(mn.staffFood), dump = num(mn.dump), mt = num(mn.maintenance), oi = num(mn.otherIncome);
+    const np = sales - purchase - fc - sf - dump - mt + oi;
+    t.sales += sales; t.purchase += purchase; t.fc += fc;
+    t.sf += sf; t.dump += dump; t.mt += mt; t.oi += oi; t.np += np;
+  });
+  return t;
+}
+function yearRangeLabel(year){
+  const yd = state.years[year];
+  if (!yd) return "";
+  const startM = yd.summaryStartMonth || defaultSummaryStartMonth(year);
+  return startM === "Jan" ? "full year" : `${startM}–Dec`;
+}
+function dailyEntryTotals(e){
+  const c = num(e.cafe.upi)+num(e.cafe.online)+num(e.cafe.cash);
+  const r = num(e.rcExpress.upi)+num(e.rcExpress.cash);
+  const t = num(e.truck.upi)+num(e.truck.cash);
+  const tc = num(e.tcs.t1)+num(e.tcs.t2);
+  const f = num(e.rcf.upi)+num(e.rcf.cash);
+  // "All Total" matches your spreadsheet: Café + RC Express + Truck + TCS (RCF tracked separately)
+  return { cafe:c, rcExpress:r, truck:t, tcs:tc, rcf:f, all:c+r+t+tc, grand:c+r+t+tc+f };
+}
+function dayName(dateStr){
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d)) return "";
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
+}
+// Format a Date as YYYY-MM-DD in LOCAL time (avoids UTC-shift bugs in IST etc.)
+function ymdLocal(d){
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function todayLocal(){ return ymdLocal(new Date()); }
+function addDailyRow(){
+  // Date rules:
+  //   - If there are existing entries, add next day after the last one
+  //   - Else if viewing the current calendar year, use today's local date
+  //   - Else (viewing past/future year) start at Jan 1 of that year
+  let d;
+  if (state.daily.entries.length){
+    const last = state.daily.entries[state.daily.entries.length-1].date;
+    const [yy, mm, dd] = last.split("-").map(n => +n);
+    d = new Date(yy, mm-1, dd);
+    d.setDate(d.getDate()+1);
+  } else if (state.currentYear === CURRENT_YEAR){
+    d = new Date();
+  } else {
+    d = new Date(state.currentYear, 0, 1);
+  }
+  const iso = ymdLocal(d);
+  state.daily.entries.push(blankDailyEntry(iso));
+  saveAll();
+}
+function deleteDailyRow(idx){
+  if (!confirm("Delete this day's entry?")) return;
+  state.daily.entries.splice(idx, 1);
+  saveAll();
+}
+function lockDailyRow(idx){
+  state.daily.entries[idx].locked = true;
+  saveAll();
+}
+function unlockDailyRow(idx){
+  state.daily.entries[idx].locked = false;
+  saveAll();
+}
+function toggleEditMode(){
+  if (!state.editMode){
+    if (!confirm("Enable Edit Mode?\n\nThis unlocks past months & saved daily entries across the whole report (Sales, Inventory, Purchase, Targets, Monthly Input, Daily Sales).\n\nMake your corrections, then click 🔒 Done Editing to re-lock everything.")) return;
+    state.editMode = true;
+  } else {
+    // Exiting edit mode — re-lock any unlocked daily rows for safety
+    if (state.daily && state.daily.entries) state.daily.entries.forEach(e => { e.locked = true; });
+    state.editMode = false;
+  }
+  saveAll();
+}
+function renderDaily(){
+  const d = state.daily;
+  if (!d) return;
+  const today = todayLocal();
+
+  // Auto-add today's row if we're viewing the current calendar year and no entry exists for today.
+  // This way the user always sees today's row ready to fill on landing — no need to click + Add Day.
+  if (state.currentYear === CURRENT_YEAR){
+    const hasToday = (d.entries || []).some(e => e.date === today);
+    if (!hasToday){
+      d.entries = d.entries || [];
+      d.entries.push(blankDailyEntry(today));
+      // Persist quietly; this re-renders so subsequent code sees the new row.
+      saveAll(true);
+    }
+  }
+
+  // Per-day target input
+  const tgtInp = document.getElementById("dailyTargetInput");
+  if (tgtInp){
+    tgtInp.value = d.perDayTarget;
+    tgtInp.oninput = e => { d.perDayTarget = num(e.target.value); saveAll(true); };
+  }
+
+  // Edit-mode button label + banner
+  const btn = document.getElementById("editModeBtn");
+  const banner = document.getElementById("editModeBanner");
+  if (btn){
+    if (state.editMode){
+      btn.innerHTML = "🔒 Done Editing";
+      btn.classList.remove("btn-secondary");
+      btn.classList.add("btn-danger");
+    } else {
+      btn.innerHTML = "🔓 Edit Saved Entries";
+      btn.classList.remove("btn-danger");
+      btn.classList.add("btn-secondary");
+    }
+  }
+  if (banner) banner.style.display = state.editMode ? "block" : "none";
+  const tbody = document.getElementById("dailyBody");
+  let html = "";
+  // sub-total accumulators
+  let sCafeU=0,sCafeO=0,sCafeC=0,sCafeT=0;
+  let sRcU=0,sRcC=0,sRcT=0;
+  let sTrU=0,sTrC=0,sTrT=0;
+  let sT1=0,sT2=0,sTcsT=0;
+  let sRcfU=0,sRcfC=0,sRcfT=0;
+  let sAll=0;
+  d.entries.forEach((e, idx) => {
+    const t = dailyEntryTotals(e);
+    sCafeU+=num(e.cafe.upi); sCafeO+=num(e.cafe.online); sCafeC+=num(e.cafe.cash); sCafeT+=t.cafe;
+    sRcU+=num(e.rcExpress.upi); sRcC+=num(e.rcExpress.cash); sRcT+=t.rcExpress;
+    sTrU+=num(e.truck.upi); sTrC+=num(e.truck.cash); sTrT+=t.truck;
+    sT1+=num(e.tcs.t1); sT2+=num(e.tcs.t2); sTcsT+=t.tcs;
+    sRcfU+=num(e.rcf.upi); sRcfC+=num(e.rcf.cash); sRcfT+=t.rcf;
+    sAll+=t.all;
+    const delta = t.all - num(d.perDayTarget);
+    const cls = delta>=0 ? "badge-good" : "badge-bad";
+    const locked = !!e.locked;
+    const dis = locked ? "disabled" : "";
+    const isToday = e.date === today;
+    const isPast = e.date && e.date < today;
+    // Edit button visibility rules:
+    //   - Today's row: always show Save/Edit (so user can save today's entry and edit if needed)
+    //   - Past rows: hidden by default; only visible when global editMode is ON
+    //   - Future rows: same as past — gated behind editMode
+    const showEdit = isToday || state.editMode;
+    const rowClass = locked ? (isPast && !state.editMode ? "row-locked row-past" : "row-locked") : "row-editing";
+    let actionBtn = "";
+    if (locked){
+      if (showEdit){
+        actionBtn = `<button class="btn btn-secondary" style="padding:4px 9px;font-size:11px" onclick="unlockDailyRow(${idx})" title="Unlock this row to edit">✏️ Edit</button>`;
+      } else {
+        actionBtn = `<span class="small" style="color:var(--muted)" title="Past entries are read-only. Use 🔓 Edit Saved Entries to unlock.">🔒 Saved</span>`;
+      }
+    } else {
+      actionBtn = `<button class="btn btn-primary" style="padding:4px 9px;font-size:11px" onclick="lockDailyRow(${idx})" title="Save & lock this row">💾 Save</button>
+                   <button class="btn btn-danger" style="padding:3px 7px;font-size:11px;margin-left:4px" onclick="deleteDailyRow(${idx})" title="Delete this day">×</button>`;
+    }
+    html += `<tr class="${rowClass}">
+      <td><input type="date" data-idx="${idx}" data-f="date" value="${e.date||""}" style="padding:5px;font-size:12px" ${dis}/></td>
+      <td><b>${dayName(e.date)}</b>${locked ? ' <span class="lock-badge" title="Locked">🔒</span>' : ''}</td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="upi" value="${e.cafe.upi}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="online" value="${e.cafe.online}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="cash" value="${e.cafe.cash}" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(t.cafe)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="upi" value="${e.rcExpress.upi}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="cash" value="${e.rcExpress.cash}" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(t.rcExpress)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="upi" value="${e.truck.upi}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="cash" value="${e.truck.cash}" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(t.truck)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t1" value="${e.tcs.t1}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t2" value="${e.tcs.t2}" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(t.tcs)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="upi" value="${e.rcf.upi}" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="cash" value="${e.rcf.cash}" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(t.rcf)}</b></td>
+      <td class="derived-cell"><b>${fmt(t.all)}</b></td>
+      <td class="${cls}"><b>${delta>=0?"+":""}${fmt0(delta)}</b></td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  // Wire input handlers
+  tbody.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", ev => {
+      const idx = +ev.target.dataset.idx;
+      const u = ev.target.dataset.u;
+      const f = ev.target.dataset.f;
+      if (f === "date") state.daily.entries[idx].date = ev.target.value;
+      else state.daily.entries[idx][u][f] = num(ev.target.value);
+      saveAll(true);
+    });
+  });
+  // Sub-total row
+  document.getElementById("dailySubTotalRow").innerHTML = `
+    <td><b>Sub-total</b></td><td></td>
+    <td>${fmt0(sCafeU)}</td><td>${fmt0(sCafeO)}</td><td>${fmt0(sCafeC)}</td><td><b>${fmt(sCafeT)}</b></td>
+    <td>${fmt0(sRcU)}</td><td>${fmt0(sRcC)}</td><td><b>${fmt(sRcT)}</b></td>
+    <td>${fmt0(sTrU)}</td><td>${fmt0(sTrC)}</td><td><b>${fmt(sTrT)}</b></td>
+    <td>${fmt0(sT1)}</td><td>${fmt0(sT2)}</td><td><b>${fmt(sTcsT)}</b></td>
+    <td>${fmt0(sRcfU)}</td><td>${fmt0(sRcfC)}</td><td><b>${fmt(sRcfT)}</b></td>
+    <td><b>${fmt(sAll)}</b></td>
+    <td colspan="2" class="small">Target/day: ${fmt(d.perDayTarget)}</td>`;
+  // Avg row
+  const n = d.entries.length || 1;
+  document.getElementById("dailyAvgRow").innerHTML = `
+    <td><b>Avg / Day</b></td><td class="small">${d.entries.length} day${d.entries.length===1?"":"s"}</td>
+    <td>${fmt0(sCafeU/n)}</td><td>${fmt0(sCafeO/n)}</td><td>${fmt0(sCafeC/n)}</td><td>${fmt(sCafeT/n)}</td>
+    <td>${fmt0(sRcU/n)}</td><td>${fmt0(sRcC/n)}</td><td>${fmt(sRcT/n)}</td>
+    <td>${fmt0(sTrU/n)}</td><td>${fmt0(sTrC/n)}</td><td>${fmt(sTrT/n)}</td>
+    <td>${fmt0(sT1/n)}</td><td>${fmt0(sT2/n)}</td><td>${fmt(sTcsT/n)}</td>
+    <td>${fmt0(sRcfU/n)}</td><td>${fmt0(sRcfC/n)}</td><td>${fmt(sRcfT/n)}</td>
+    <td><b>${fmt(sAll/n)}</b></td>
+    <td colspan="2"></td>`;
+  const info = document.getElementById("dailyCountInfo");
+  if (info) info.textContent = `${d.entries.length} day${d.entries.length===1?"":"s"} entered · YTD total ${fmt(sAll)}`;
+}
+
+/* ====================================================================== */
+/*  TABS                                                                   */
+/* ====================================================================== */
+document.querySelectorAll(".tab").forEach(t=>{
+  if (t.classList.contains("section-head")) return;
+  t.onclick = ()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById("panel-"+t.dataset.tab).classList.add("active");
+    if (t.dataset.tab === "db") renderDashboard();
+  };
+});
+
+/* ====================================================================== */
+/*  EXPORT / IMPORT                                                        */
+/* ====================================================================== */
+function exportJSON(){
+  const blob = new Blob([JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode, auth:state.auth}, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `RC_Monthly_Report_${state.year}.json`; a.click();
+  URL.revokeObjectURL(url);
+  flash("✓ JSON exported");
+}
+function importJSON(ev){
+  const file = ev.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (parsed && (parsed.years || parsed.rc)) {
+        ingestParsed(parsed);
+        saveAll(); flash("✓ Data imported");
+      } else { alert("Invalid JSON file."); }
+    } catch (err) { alert("Could not parse JSON: " + err.message); }
+  };
+  r.readAsText(file);
+  ev.target.value = "";
+}
+function resetData(){
+  if (!confirm("This clears the current year's data and reloads the original seed for that year. Continue?")) return;
+  state.years[state.currentYear] = makeYearData(state.currentYear);
+  bindYear(state.currentYear);
+  saveAll();
+}
+
+/* ====================================================================== */
+/*  WHATSAPP SHARE                                                         */
+/* ====================================================================== */
+function buildSummaryText(m){
+  const r = monthRow(m);
+  let txt = `*🥨 Rolling Crunchys — ${m} ${state.year} Report*\n\n`;
+  txt += `*Sales by Store:*\n`;
+  STORES.forEach(s=>{ const v = storeRowTotal(m,s); if (v>0) txt += `• ${s}: ${fmt(v)}\n`; });
+  txt += `\n*Monthly Input:*\n`;
+  txt += `• Sales: ${fmt(r.sales)}\n`;
+  txt += `• Purchase: ${fmt(r.purchase)}\n`;
+  txt += `• Food Cost: ${fmt(r.fc)}  (FC %: ${pct(r.fc,r.sales)})\n`;
+  txt += `• Staff Food: ${fmt(r.sf)}\n`;
+  txt += `• Dump/Wastage: ${fmt(r.dump)}\n`;
+  txt += `• Maintenance: ${fmt(r.mt)}\n`;
+  if (r.oi) txt += `• Other Income: ${fmt(r.oi)}\n`;
+  txt += `• *Net Profit (Est.): ${fmt(r.np)}*  (NP %: ${pct(r.np,r.sales)})\n`;
+
+  // Product Consumption (top items by value for the selected month)
+  const yd = state.years[state.currentYear];
+  if (yd && yd.products && yd.products.length && yd.consumption && yd.consumption[m]){
+    const rows = yd.products.map(p => {
+      const rec = yd.consumption[m][p.id] || {};
+      return { name: p.name, unit: p.unit, qty: consumedQty(rec), val: consumedValue(rec) };
+    }).filter(x => x.qty > 0 || x.val > 0)
+      .sort((a,b) => b.val - a.val);
+    if (rows.length){
+      let totalVal = 0;
+      txt += `\n*Product Consumption (${m}):*\n`;
+      rows.slice(0, 8).forEach(p => {
+        totalVal += p.val;
+        txt += `• ${p.name}: ${fmt0(p.qty)} ${p.unit} — ${fmt(p.val)}\n`;
+      });
+      const allVal = rows.reduce((s,p)=> s + p.val, 0);
+      if (rows.length > 8) txt += `_…and ${rows.length-8} more_\n`;
+      txt += `*Total Consumption Value: ${fmt(allVal)}*\n`;
+    }
+  }
+
+  // YTD
+  let yS=0, yNP=0, yFC=0;
+  MONTHS.forEach(mm=>{ const x=monthRow(mm); yS+=x.sales; yNP+=x.np; yFC+=x.fc; });
+  txt += `\n*Year-to-Date ${state.year}:*\n`;
+  txt += `• YTD Sales: ${fmt(yS)}\n`;
+  txt += `• YTD Food Cost: ${fmt(yFC)} (${pct(yFC,yS)})\n`;
+  txt += `• YTD Net Profit: ${fmt(yNP)} (${pct(yNP,yS)})\n`;
+  txt += `\n_Generated from RC Monthly Report Dashboard_`;
+  return txt;
+}
+function shareWhatsAppText(){
+  const sel = document.getElementById("waMonthPicker");
+  if (!sel.options.length) sel.innerHTML = MONTHS.map(m=>`<option value="${m}">${m} ${state.year}</option>`).join("");
+  rebuildSummaryText();
+  document.getElementById("textModal").classList.add("show");
+}
+function rebuildSummaryText(){
+  const m = document.getElementById("waMonthPicker").value || MONTHS[0];
+  document.getElementById("shareTextBox").value = buildSummaryText(m);
+}
+function openWAWithText(){
+  const txt = document.getElementById("shareTextBox").value;
+  window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+}
+function copyText(){
+  const ta = document.getElementById("shareTextBox");
+  ta.select(); document.execCommand("copy");
+  flash("✓ Text copied");
+}
+function shareWhatsAppLink(){
+  // Share link doesn't include auth — recipient should not get other users' password hashes
+  const json = JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode});
+  const compressed = LZString.compressToEncodedURIComponent(json);
+  const baseURL = location.href.split("#")[0];
+  const link = baseURL + "#d=" + compressed;
+  document.getElementById("shareLinkBox").value = link;
+  document.getElementById("linkModal").classList.add("show");
+}
+function copyShareLink(){
+  const ta = document.getElementById("shareLinkBox");
+  ta.select(); document.execCommand("copy");
+  flash("✓ Link copied");
+}
+function openWAWithLink(){
+  const link = document.getElementById("shareLinkBox").value;
+  const msg = `📊 Rolling Crunchys ${state.year} Report\nOpen this link to view the live report:\n${link}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+}
+function closeModal(){ document.querySelectorAll(".modal").forEach(m=>m.classList.remove("show")); }
+
+/* ====================================================================== */
+/*  AUTH                                                                   */
+/* ====================================================================== */
+async function hashStr(s){
+  const buf = new TextEncoder().encode(s);
+  const h = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function showLogin(){
+  document.getElementById("loginOverlay").classList.remove("hidden");
+  setTimeout(()=> document.getElementById("loginEmail")?.focus(), 50);
+}
+function hideLogin(){
+  document.getElementById("loginOverlay").classList.add("hidden");
+}
+function loginMsg(text, kind){
+  const el = document.getElementById("loginMsg");
+  if (!text){ el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="login-msg ${kind||"info"}">${text}</div>`;
+}
+async function handleLoginSubmit(){
+  const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+  const pw = document.getElementById("loginPassword").value;
+  const pw2 = document.getElementById("loginPasswordConfirm").value;
+  const confirmShown = document.getElementById("passwordConfirmLabel").style.display !== "none";
+
+  if (!email || !pw){ loginMsg("Enter both email and password.","err"); return; }
+
+  const noUsers = Object.keys(state.auth.users).length === 0;
+  const existing = state.auth.users[email];
+
+  // First-time admin setup
+  if (noUsers){
+    if (!confirmShown){
+      // Force confirmation step
+      document.getElementById("passwordConfirmLabel").style.display = "block";
+      document.getElementById("loginSub").textContent = "First account — you will become admin. Confirm your password.";
+      loginMsg("This portal has no accounts yet. The account you create now becomes the <b>admin</b>.","info");
+      return;
+    }
+    if (pw !== pw2){ loginMsg("Passwords don't match.","err"); return; }
+    const h = await hashStr(pw);
+    state.auth.users[email] = { passwordHash: h, role: "admin", createdAt: Date.now() };
+    state.auth.session = { email, role: "admin", since: Date.now() };
+    saveAll();
+    hideLogin();
+    refreshAll();
+    return;
+  }
+
+  // Returning user
+  if (existing){
+    const h = await hashStr(pw);
+    if (h === existing.passwordHash){
+      state.auth.session = { email, role: existing.role, since: Date.now() };
+      saveAll();
+      hideLogin();
+      refreshAll();
+    } else {
+      loginMsg("Incorrect password.","err");
+    }
+    return;
+  }
+
+  // Authorized but no password set yet → register
+  if (state.auth.authorizedEmails.includes(email)){
+    if (!confirmShown){
+      document.getElementById("passwordConfirmLabel").style.display = "block";
+      document.getElementById("loginSub").textContent = "Set your password (first login)";
+      loginMsg("Your email is authorized. Choose a password to register.","info");
+      return;
+    }
+    if (pw !== pw2){ loginMsg("Passwords don't match.","err"); return; }
+    const h = await hashStr(pw);
+    state.auth.users[email] = { passwordHash: h, role: "user", createdAt: Date.now() };
+    state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
+    state.auth.session = { email, role: "user", since: Date.now() };
+    saveAll();
+    hideLogin();
+    refreshAll();
+    return;
+  }
+
+  loginMsg("This email is not authorized. Contact an admin to add it.","err");
+}
+function logout(){
+  if (!confirm("Log out?")) return;
+  state.auth.session = null;
+  saveAll();
+  showLogin();
+}
+function isAdmin(){ return state.auth.session && state.auth.session.role === "admin"; }
+function addAuthorizedEmail(){
+  if (!isAdmin()){ alert("Admin only"); return; }
+  const inp = document.getElementById("authNewEmail");
+  const e = inp.value.trim().toLowerCase();
+  if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ alert("Enter a valid email"); return; }
+  if (state.auth.users[e]){ alert("Already a registered user"); return; }
+  if (state.auth.authorizedEmails.includes(e)){ alert("Already authorized"); return; }
+  state.auth.authorizedEmails.push(e);
+  inp.value = "";
+  saveAll();
+}
+async function createUser(){
+  if (!isAdmin()){ alert("Admin only — only admins can create users"); return; }
+  const emailEl = document.getElementById("createUserEmail");
+  const pwEl    = document.getElementById("createUserPassword");
+  const roleEl  = document.getElementById("createUserRole");
+  const email = emailEl.value.trim().toLowerCase();
+  const pw    = pwEl.value;
+  const role  = roleEl.value === "admin" ? "admin" : "user";
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert("Enter a valid email"); emailEl.focus(); return; }
+  if (!pw || pw.length < 4){ alert("Password must be at least 4 characters"); pwEl.focus(); return; }
+  if (state.auth.users[email]){ alert("A user with this email already exists. Use Reset PW or Remove instead."); return; }
+  const passwordHash = await hashStr(pw);
+  state.auth.users[email] = { passwordHash, role, createdAt: Date.now() };
+  // If the email was on the pending list, remove it (account is created now)
+  state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
+  emailEl.value = "";
+  pwEl.value = "";
+  roleEl.value = "user";
+  flash(`✓ User created: ${email} (${role})`);
+  saveAll();
+}
+function removeAuthorized(email){
+  if (!isAdmin()) return;
+  if (!confirm("Remove "+email+" from authorized list?")) return;
+  state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
+  saveAll();
+}
+async function resetUserPassword(email){
+  if (!isAdmin()) return;
+  const np = prompt("Set a new password for " + email + ":");
+  if (!np) return;
+  state.auth.users[email].passwordHash = await hashStr(np);
+  alert("Password reset. Tell the user the new password.");
+  saveAll();
+}
+function removeUser(email){
+  if (!isAdmin()){ alert("Admin only — only admins can delete users"); return; }
+  if (email === state.auth.session.email){ alert("You can't delete your own account."); return; }
+  // Prevent deleting the last admin
+  const admins = Object.entries(state.auth.users).filter(([,u]) => u.role === "admin");
+  if (admins.length === 1 && admins[0][0] === email){
+    alert("Cannot delete the only admin account. Promote another user to admin first.");
+    return;
+  }
+  if (!confirm("Permanently delete user " + email + "?\n\nThis cannot be undone.")) return;
+  delete state.auth.users[email];
+  saveAll();
+  flash(`✓ Deleted: ${email}`);
+}
+function promoteUser(email){
+  if (!isAdmin()) return;
+  state.auth.users[email].role = state.auth.users[email].role === "admin" ? "user" : "admin";
+  saveAll();
+}
+function renderAuthPanel(){
+  // Show/hide tab based on admin role
+  const tabBtn = document.getElementById("authTabBtn");
+  const tabLabel = document.getElementById("adminSectionLabel");
+  if (tabBtn) tabBtn.style.display = isAdmin() ? "" : "none";
+  if (tabLabel) tabLabel.style.display = isAdmin() ? "" : "none";
+  if (!isAdmin()) return;
+  // Pending
+  const p = document.getElementById("authPendingBody");
+  if (p) p.innerHTML = state.auth.authorizedEmails.length
+    ? state.auth.authorizedEmails.map(e =>
+        `<tr><td>${e}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeAuthorized('${e}')">Remove</button></td></tr>`).join("")
+    : `<tr><td colspan="2" class="small" style="text-align:center;color:var(--muted)">No pending invitations</td></tr>`;
+  // Users
+  const u = document.getElementById("authUsersBody");
+  if (u){
+    const entries = Object.entries(state.auth.users);
+    u.innerHTML = entries.length ? entries.map(([email, info]) => {
+      const isYou = email === state.auth.session.email;
+      const roleBadge = info.role === "admin"
+        ? '<span style="background:#fef3c7;color:#7c2d12;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">admin</span>'
+        : '<span style="background:#e0f2fe;color:#0c4a6e;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">user</span>';
+      return `<tr>
+        <td>${email}${isYou?' <span class="small" style="color:var(--good)">(you)</span>':''}</td>
+        <td>${roleBadge}</td>
+        <td>${new Date(info.createdAt).toLocaleDateString()}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="resetUserPassword('${email}')" title="Set a new password for this user">🔑 Reset PW</button>
+          <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;margin-left:4px" onclick="promoteUser('${email}')" title="Promote to admin / demote to user">↕ Role</button>
+          ${isYou?'<span class="small" style="color:var(--muted);margin-left:4px">(self)</span>':`<button class="btn btn-danger" style="padding:4px 9px;font-size:11px;margin-left:4px" onclick="removeUser('${email}')" title="Permanently delete this user">🗑️ Delete</button>`}
+        </td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="4" class="small" style="text-align:center;color:var(--muted)">No users yet</td></tr>`;
+  }
+}
+
+/* ====================================================================== */
+/*  INIT                                                                   */
+/* ====================================================================== */
+loadState();
+if (!state.auth.session) showLogin();
+else { hideLogin(); refreshAll(); }
+// Submit on Enter in the login form
+document.getElementById("loginForm")?.addEventListener("submit", e => { e.preventDefault(); handleLoginSubmit(); });
+window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session){ hideLogin(); refreshAll(); } else { showLogin(); } });
+</script>
+<!-- ============== SERVER-MODE OVERRIDE (Next.js + Neon) ============== -->
+<style>
+  /* Hide the in-page login overlay since auth happens on the /login page. */
+  #loginOverlay { display: none !important; }
+</style>
+<script>
+/* Patch loadState/saveAll to use /api/data instead of localStorage,
+   and user-management to use /api/auth/* instead of in-state arrays. */
+(function(){
+  // Wait for initial init to finish, then override.
+  function patch(){
+    if (typeof state === "undefined" || typeof saveAll !== "function") {
+      return setTimeout(patch, 50);
+    }
+    // ----- DATA persistence -----
+    const origIngest = typeof ingestParsed === "function" ? ingestParsed : null;
+    window.loadState = async function(){
+      try {
+        const r = await fetch("/api/data", { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        if (origIngest) origIngest(j.data || {});
+      } catch(e) {
+        console.warn("loadState failed", e);
+      }
+    };
+    let saveTimer = null;
+    window.saveAll = function(silent){
+      // Refresh the UI through the existing flow but route persistence to the server.
+      if (typeof refreshAll === "function") {
+        const snap = typeof snapshotFocus === "function" ? snapshotFocus() : null;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          try {
+            const body = {
+              currentYear: state.currentYear,
+              years: state.years,
+              editMode: state.editMode
+            };
+            const r = await fetch("/api/data", {
+              method: "PUT",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ data: body })
+            });
+            if (!r.ok) console.warn("save failed", r.status);
+            else if (!silent && typeof flash === "function") flash("✓ Saved to server");
+          } catch (e) {
+            console.warn("save error", e);
+            if (typeof flash === "function") flash("✗ Save error");
+          }
+        }, 250);
+        refreshAll();
+        if (snap && typeof restoreFocus === "function") restoreFocus(snap);
+      }
+    };
+
+    // ----- USER MANAGEMENT (admin only) — proxy to /api/auth/users + /api/auth/authorized -----
+    window.createUser = async function(){
+      const emailEl = document.getElementById("createUserEmail");
+      const pwEl    = document.getElementById("createUserPassword");
+      const roleEl  = document.getElementById("createUserRole");
+      const email = emailEl.value.trim().toLowerCase();
+      const password = pwEl.value;
+      const role = roleEl.value === "admin" ? "admin" : "user";
+      if (!email || !password) { alert("Email and password required"); return; }
+      const r = await fetch("/api/auth/users", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, role })
+      });
+      const j = await r.json();
+      if (!r.ok) { alert(j.error || "Failed"); return; }
+      emailEl.value = ""; pwEl.value = ""; roleEl.value = "user";
+      flash("✓ User created: " + email);
+      await reloadAuthLists();
+    };
+    window.removeUser = async function(email){
+      if (!confirm("Delete user " + email + "?")) return;
+      const r = await fetch("/api/auth/users?email=" + encodeURIComponent(email), {
+        method: "DELETE", credentials: "same-origin"
+      });
+      const j = await r.json();
+      if (!r.ok) { alert(j.error || "Failed"); return; }
+      flash("✓ Deleted: " + email);
+      await reloadAuthLists();
+    };
+    window.resetUserPassword = async function(email){
+      const np = prompt("New password for " + email + ":");
+      if (!np || np.length < 4) return;
+      const r = await fetch("/api/auth/users", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: np })
+      });
+      if (r.ok) flash("✓ Password reset for " + email); else alert("Failed");
+    };
+    window.promoteUser = async function(email){
+      const u = (state.auth?.users?.[email]?.role) === "admin" ? "user" : "admin";
+      const r = await fetch("/api/auth/users", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role: u })
+      });
+      if (r.ok) { flash("✓ Role updated"); await reloadAuthLists(); }
+    };
+    window.addAuthorizedEmail = async function(){
+      const inp = document.getElementById("authNewEmail");
+      const email = inp.value.trim().toLowerCase();
+      if (!email) return;
+      const r = await fetch("/api/auth/authorized", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const j = await r.json();
+      if (!r.ok) { alert(j.error || "Failed"); return; }
+      inp.value = "";
+      flash("✓ Email authorized: " + email);
+      await reloadAuthLists();
+    };
+    window.removeAuthorized = async function(email){
+      if (!confirm("Remove " + email + " from authorized list?")) return;
+      const r = await fetch("/api/auth/authorized?email=" + encodeURIComponent(email), {
+        method: "DELETE", credentials: "same-origin"
+      });
+      if (r.ok) { flash("✓ Removed"); await reloadAuthLists(); }
+    };
+    window.logout = async function(){
+      if (!confirm("Log out?")) return;
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      location.href = "/login";
+    };
+
+    async function reloadAuthLists(){
+      if (!state.auth) state.auth = { users: {}, authorizedEmails: [], session: state.auth?.session };
+      try {
+        const u = await fetch("/api/auth/users", { credentials: "same-origin" });
+        if (u.ok) {
+          const j = await u.json();
+          state.auth.users = {};
+          (j.users || []).forEach(x => {
+            state.auth.users[x.email] = { passwordHash: "(server)", role: x.role, createdAt: new Date(x.createdAt).getTime() };
+          });
+        }
+        const a = await fetch("/api/auth/authorized", { credentials: "same-origin" });
+        if (a.ok) {
+          const j = await a.json();
+          state.auth.authorizedEmails = j.emails || [];
+        }
+      } catch(e){}
+      if (typeof renderAuthPanel === "function") renderAuthPanel();
+    }
+
+    // ----- INIT -----
+    // Replace the existing init flow: fetch /api/auth/me to set session, then load data.
+    (async function(){
+      try {
+        const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+        const meJson = await me.json();
+        if (!meJson.user) { location.href = "/login"; return; }
+        state.auth = state.auth || { users: {}, authorizedEmails: [] };
+        state.auth.session = { email: meJson.user.email, role: meJson.user.role, since: Date.now() };
+        await loadState();
+        if (typeof hideLogin === "function") hideLogin();
+        if (typeof refreshAll === "function") refreshAll();
+        if (state.auth.session.role === "admin") await reloadAuthLists();
+      } catch(e){
+        console.error("init error", e);
+      }
+    })();
+  }
+  patch();
+})();
+</script>
+
+</body>
+</html>
