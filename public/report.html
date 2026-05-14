@@ -375,13 +375,13 @@
       </div>
     </div>
 
-    <!-- ============== PRODUCT CONSUMPTION ============== -->
+    <!-- ============== PRODUCT CONSUMPTION (site-wise) ============== -->
     <div class="panel" id="panel-prod">
       <h3 class="section-title">📦 Product Consumption Report</h3>
       <div class="help">
-        Track each product's consumption per month. <b>Consumed</b> = Opening + Received − Closing. <b>Value</b> = Consumed × Rate ₹/unit.<br/>
-        Click <b>+ Add Product</b> to add a new item. Existing products can be renamed or removed (delete clears all months for that product).
-        Lock state follows the same per-month Save/Edit rule as other tabs.
+        Per month, per product: enter <b>site usage</b> (Café · Truck · Express · TCS) plus <b>Opening Stock</b>, <b>Store Purchase</b>, <b>Wastage</b>, <b>Staff Food</b>, <b>Closing Stock</b>.<br/>
+        <b>Total</b>, <b>Actual Deviation</b> = (Opening + Purchase) − (Total used + Wastage + Staff Food + Closing), and <b>% Deviation</b> = Deviation × 100 / Purchase are auto-calculated.
+        Cells turn <span style="color:#dc2626;font-weight:700">red</span> when |Actual Deviation| &gt; ${DEVIATION_THRESHOLD} kg.
       </div>
       <div class="toolbar" style="margin-bottom:10px">
         <label class="small" style="display:flex;align-items:center;gap:5px">Month:
@@ -389,25 +389,30 @@
         </label>
         <span id="prodLockStatus" class="small" style="margin-left:6px"></span>
         <span id="prodLockAction" style="margin-left:6px"></span>
-        <button class="btn btn-primary" onclick="addProduct()" style="margin-left:auto">+ Add Product</button>
+        <button class="btn btn-primary" onclick="addProduct()" style="margin-left:auto">+ Add Item</button>
       </div>
       <div class="scroll-x">
         <table id="prodTable">
           <thead>
             <tr>
-              <th>Product</th>
+              <th>Item</th>
               <th>Unit</th>
+              <th>Café</th>
+              <th>Truck</th>
+              <th>Express</th>
+              <th>TCS</th>
+              <th>Total</th>
               <th>Opening</th>
-              <th>Received</th>
+              <th>Purchase</th>
+              <th>Wastage</th>
+              <th>Staff Food</th>
               <th>Closing</th>
-              <th>Consumed</th>
-              <th>Rate ₹</th>
-              <th>Value ₹</th>
+              <th>Deviation</th>
+              <th>% Dev</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="prodBody"></tbody>
-          <tfoot><tr class="total-row" id="prodTotalRow"></tr></tfoot>
         </table>
       </div>
     </div>
@@ -806,15 +811,28 @@ let state = {
   // Aliases set by bindYear()
   year: 2026, rc: null, mn: null, daily: null
 };
+const CONSUMPTION_SITES = ["Café","Truck","Express","TCS"];
+const DEVIATION_THRESHOLD = 3; // red flag when |Actual Deviation| > 3 (kg/L)
+
 function defaultProducts2026(){
   return [
-    {id:"p_chicken", name:"Chicken",     unit:"kg"},
-    {id:"p_paneer",  name:"Paneer",      unit:"kg"},
-    {id:"p_oil",     name:"Cooking Oil", unit:"L"},
-    {id:"p_flour",   name:"Flour",       unit:"kg"},
-    {id:"p_onion",   name:"Onion",       unit:"kg"},
-    {id:"p_tomato",  name:"Tomato",      unit:"kg"}
+    {id:"p_chicken",  name:"Chicken",   unit:"kg"},
+    {id:"p_paneer",   name:"Paneer",    unit:"kg"},
+    {id:"p_icecream", name:"Ice cream", unit:"L"}
   ];
+}
+function blankConsumptionRec(){
+  return {
+    sites: { "Café":0, "Truck":0, "Express":0, "TCS":0 },
+    opening:0, purchase:0, wastage:0, staffFood:0, closing:0
+  };
+}
+function seedConsumptionApr(){
+  return {
+    p_chicken:  { sites:{"Café":392,"Truck":72,"Express":0,"TCS":124}, opening:14, purchase:628, wastage:7.5, staffFood:30, closing:9 },
+    p_paneer:   { sites:{"Café":182,"Truck":18,"Express":15,"TCS":92}, opening:2,  purchase:312, wastage:0,   staffFood:0,  closing:4 },
+    p_icecream: { sites:{"Café":164,"Truck":16,"Express":0,"TCS":42}, opening:6,  purchase:226, wastage:0,   staffFood:0,  closing:8 }
+  };
 }
 function makeYearData(y){
   if (y === 2026){
@@ -822,7 +840,7 @@ function makeYearData(y){
     // 2026 seed: Jan-Apr already "saved" (locked); current month & future open
     const locks = { Jan:true, Feb:true, Mar:true, Apr:true };
     return { rc: seed.rc, mn: seed.mn, daily: seedDaily(), locks,
-             products: defaultProducts2026(), consumption: {} };
+             products: defaultProducts2026(), consumption: { Apr: seedConsumptionApr() } };
   }
   // Blank rc/mn for non-seed years (no pre-filled data, no locks)
   return {
@@ -944,19 +962,25 @@ function ingestParsed(parsed){
   // Drop legacy field
   Object.values(state.years).forEach(y => { if (y.daily && y.daily.editMode !== undefined) delete y.daily.editMode; });
 }
-/* Snapshot which input is focused so we can restore it after re-render. */
+/* Snapshot which input is focused so we can restore it after re-render.
+   Captures ALL data-* attributes (not just the original m/s/f), so tabs like
+   Product Consumption (data-pid/csite/cf/pf) and Daily Sales (data-idx/u/f)
+   restore correctly instead of snapping to the first input in the panel. */
+function camelToKebab(s){ return s.replace(/[A-Z]/g, c => "-" + c.toLowerCase()); }
 function snapshotFocus(){
   const fa = document.activeElement;
-  if (!fa || fa.tagName !== "INPUT") return null;
+  if (!fa || (fa.tagName !== "INPUT" && fa.tagName !== "TEXTAREA")) return null;
   const p = fa.closest(".panel");
   if (!p) return null;
   const snap = {
     panelId: p.id,
-    m: fa.dataset.m || "",
-    s: fa.dataset.s || "",
-    f: fa.dataset.f || "",
+    tag: fa.tagName.toLowerCase(),
+    dataset: {},
+    value: fa.value,   // preserve in-progress typing (e.g., "7." before "5" is added)
     ss: 0, se: 0
   };
+  // Copy every data-* attribute (camelCase keys)
+  for (const k in fa.dataset) snap.dataset[k] = fa.dataset[k];
   try { snap.ss = fa.selectionStart; snap.se = fa.selectionEnd; } catch(e) {}
   return snap;
 }
@@ -964,23 +988,47 @@ function restoreFocus(snap){
   if (!snap) return;
   const panel = document.getElementById(snap.panelId);
   if (!panel) return;
-  const esc = v => v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const parts = ["input"];
-  if (snap.m) parts.push(`[data-m="${esc(snap.m)}"]`);
-  if (snap.s) parts.push(`[data-s="${esc(snap.s)}"]`);
-  if (snap.f) parts.push(`[data-f="${esc(snap.f)}"]`);
+  const esc = v => String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const parts = [snap.tag || "input"];
+  for (const k in snap.dataset){
+    parts.push(`[data-${camelToKebab(k)}="${esc(snap.dataset[k])}"]`);
+  }
   const target = panel.querySelector(parts.join(""));
   if (target) {
+    _restoringFocus = true;
     target.focus();
+    // Restore the value that was in the input at snapshot time — this preserves
+    // in-progress typing like "7." that the re-render would otherwise truncate to "7".
+    if (snap.value !== undefined && target.value !== snap.value){
+      target.value = snap.value;
+    }
     try {
-      // place cursor at end if selection unavailable
-      const len = target.value.length;
+      const len = (target.value || "").length;
       const ss = Math.min(snap.ss ?? len, len);
       const se = Math.min(snap.se ?? len, len);
       target.setSelectionRange(ss, se);
     } catch(e) {}
+    // Clear the flag AFTER the focusin's setTimeout(0) has had a chance to bail.
+    setTimeout(() => { _restoringFocus = false; }, 30);
   }
 }
+
+// Flag set during restoreFocus so the auto-select-all listener doesn't fire
+// for programmatic focus changes (which would otherwise wipe in-progress decimals).
+let _restoringFocus = false;
+
+// Auto-select-all when a numeric input gets focus from a user action: typing replaces "0".
+document.addEventListener("focusin", e => {
+  if (_restoringFocus) return;
+  const el = e.target;
+  if (el && el.tagName === "INPUT" && el.classList && el.classList.contains("numinput") && !el.disabled){
+    // Defer slightly so the browser's own caret/selection finishes first
+    setTimeout(() => {
+      if (_restoringFocus) return;  // double-check in case timing shifts
+      try { el.select(); } catch(_) {}
+    }, 0);
+  }
+});
 
 /* Debounced render so rapid typing stays smooth and the cursor never jumps out. */
 let _renderTimer = null;
@@ -1693,7 +1741,7 @@ function defaultTargetAsOfDate(m){
   }
   return `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDayNum).padStart(2,"0")}`;
 }
-/* ===== Product Consumption ===== */
+/* ===== Product Consumption (site-wise per spreadsheet structure) ===== */
 function newProductId(){ return "p_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
 function ensureProductMonth(m){
   const yd = state.years[state.currentYear];
@@ -1701,10 +1749,31 @@ function ensureProductMonth(m){
   if (!yd.consumption[m]) yd.consumption[m] = {};
   return yd.consumption[m];
 }
-function consumedQty(rec){
-  return num(rec && rec.opening) + num(rec && rec.received) - num(rec && rec.closing);
+function ensureConsumptionRec(m, pid){
+  const map = ensureProductMonth(m);
+  if (!map[pid] || map[pid].sites === undefined){ map[pid] = blankConsumptionRec(); }
+  // ensure all sites exist on the record
+  CONSUMPTION_SITES.forEach(s => { if (map[pid].sites[s] === undefined) map[pid].sites[s] = 0; });
+  return map[pid];
 }
-function consumedValue(rec){ return consumedQty(rec) * num(rec && rec.rate); }
+// Total qty consumed across sites for one product (the "Total" row).
+function consumptionTotalSites(rec){
+  let t = 0; CONSUMPTION_SITES.forEach(s => { t += num(rec.sites && rec.sites[s]); }); return t;
+}
+// Actual Deviation = (Opening + Purchase) - (Sum of sites + Wastage + Staff Food + Closing).
+function consumptionDeviation(rec){
+  const sites = consumptionTotalSites(rec);
+  return (num(rec.opening) + num(rec.purchase)) - (sites + num(rec.wastage) + num(rec.staffFood) + num(rec.closing));
+}
+// % Deviation = Actual Deviation / Store Purchase × 100.
+function consumptionDeviationPct(rec){
+  const p = num(rec.purchase);
+  return p > 0 ? (consumptionDeviation(rec) / p) * 100 : 0;
+}
+function consumptionIsRed(rec){ return Math.abs(consumptionDeviation(rec)) > DEVIATION_THRESHOLD; }
+// Back-compat helpers retained for WhatsApp summary
+function consumedQty(rec){ return rec && rec.sites !== undefined ? consumptionTotalSites(rec) : 0; }
+function consumedValue(rec){ return 0; } /* no Rate field in new structure */
 function addProduct(){
   const yd = state.years[state.currentYear];
   if (!yd.products) yd.products = [];
@@ -1728,7 +1797,6 @@ function removeProduct(pid){
 function renderProducts(){
   const sel = document.getElementById("prodMonthPicker");
   if (!sel) return;
-  // Populate month options (also when year changes)
   sel.innerHTML = MONTHS.map(m => `<option value="${m}" ${m===(sel.value||CURRENT_MONTH)?"selected":""}>${m} ${state.currentYear}</option>`).join("");
   const m = sel.value || CURRENT_MONTH;
   const yd = state.years[state.currentYear];
@@ -1747,56 +1815,60 @@ function renderProducts(){
   const actionEl = document.getElementById("prodLockAction");
   if (actionEl) actionEl.innerHTML = monthActionBtn(m);
 
-  // Rows
+  // ===== Build table — one row per item =====
   const tbody = document.getElementById("prodBody");
   if (!yd.products.length){
-    tbody.innerHTML = `<tr><td colspan="9" class="small" style="text-align:center;color:var(--muted);padding:20px">No products yet. Click <b>+ Add Product</b> above to start tracking.</td></tr>`;
-    document.getElementById("prodTotalRow").innerHTML = "";
+    tbody.innerHTML = `<tr><td colspan="15" class="small" style="text-align:center;color:var(--muted);padding:20px">No items yet. Click <b>+ Add Item</b> to start tracking.</td></tr>`;
     return;
   }
-  let html = "";
-  let totalValue = 0, totalConsumed = 0;
+  let body = "";
   yd.products.forEach(p => {
-    const rec = yd.consumption[m][p.id] || {opening:0, received:0, closing:0, rate:0};
-    const cq = consumedQty(rec);
-    const cv = consumedValue(rec);
-    totalConsumed += cq; totalValue += cv;
-    html += `<tr>
-      <td><input type="text" value="${p.name.replace(/"/g,'&quot;')}" data-pid="${p.id}" data-pf="name" ${dis} style="width:140px;padding:5px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
-      <td><input type="text" value="${(p.unit||'').replace(/"/g,'&quot;')}" data-pid="${p.id}" data-pf="unit" ${dis} style="width:55px;padding:5px;border:1px solid var(--line);border-radius:4px;font-size:12px;text-align:center"/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.opening||0}" data-pid="${p.id}" data-cf="opening" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.received||0}" data-pid="${p.id}" data-cf="received" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.closing||0}" data-pid="${p.id}" data-cf="closing" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(cq)}</b></td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.rate||0}" data-pid="${p.id}" data-cf="rate" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt(cv)}</b></td>
-      <td>${dis ? '' : `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeProduct('${p.id}')" title="Delete product">🗑️</button>`}</td>
+    const rec = ensureConsumptionRec(m, p.id);
+    const total = consumptionTotalSites(rec);
+    const dev = consumptionDeviation(rec);
+    const pct = consumptionDeviationPct(rec);
+    const red = consumptionIsRed(rec);
+    const redStyle = red ? 'style="background:#fee2e2;color:#dc2626;font-weight:700"' : '';
+    body += `<tr>
+      <td><span title="Name is fixed once added — delete the row to change" style="font-weight:600;padding:4px 6px;display:inline-block;min-width:100px">${(p.name||'').replace(/</g,'&lt;')}</span></td>
+      <td><span style="padding:4px 6px;display:inline-block;min-width:40px;text-align:center;color:var(--muted);font-size:11.5px">${(p.unit||'').replace(/</g,'&lt;')}</span></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.sites["Café"]||0}"    data-pid="${p.id}" data-csite="Café" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.sites["Truck"]||0}"   data-pid="${p.id}" data-csite="Truck" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.sites["Express"]||0}" data-pid="${p.id}" data-csite="Express" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.sites["TCS"]||0}"     data-pid="${p.id}" data-csite="TCS" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(total)}</b></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.opening||0}"   data-pid="${p.id}" data-cf="opening" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.purchase||0}"  data-pid="${p.id}" data-cf="purchase" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.wastage||0}"   data-pid="${p.id}" data-cf="wastage" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.staffFood||0}" data-pid="${p.id}" data-cf="staffFood" ${dis}/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${rec.closing||0}"   data-pid="${p.id}" data-cf="closing" ${dis}/></td>
+      <td class="derived-cell" ${redStyle}><b>${fmt0(dev)} ${p.unit||""}</b>${red?' 🔴':''}</td>
+      <td class="derived-cell" ${redStyle}>${num(rec.purchase) ? pct.toFixed(2)+"%" : "—"}</td>
+      <td>${dis ? '' : `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeProduct('${p.id}')" title="Delete this item (clears all months)">🗑️</button>`}</td>
     </tr>`;
   });
-  tbody.innerHTML = html;
+  tbody.innerHTML = body;
+
   // Wire input handlers
-  tbody.querySelectorAll("input").forEach(inp => {
+  document.getElementById("prodTable").querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", e => {
       const pid = e.target.dataset.pid;
       const pf  = e.target.dataset.pf;
       const cf  = e.target.dataset.cf;
+      const csite = e.target.dataset.csite;
       if (pf){
         const p = yd.products.find(x => x.id === pid);
         if (p) p[pf] = e.target.value;
+      } else if (csite){
+        const rec = ensureConsumptionRec(m, pid);
+        rec.sites[csite] = num(e.target.value);
       } else if (cf){
-        if (!yd.consumption[m][pid]) yd.consumption[m][pid] = {opening:0, received:0, closing:0, rate:0};
-        yd.consumption[m][pid][cf] = num(e.target.value);
+        const rec = ensureConsumptionRec(m, pid);
+        rec[cf] = num(e.target.value);
       }
       saveAll(true);
     });
   });
-  // Total row
-  document.getElementById("prodTotalRow").innerHTML = `
-    <td colspan="5" style="text-align:right">TOTAL — ${yd.products.length} product${yd.products.length===1?"":"s"}</td>
-    <td><b>${fmt0(totalConsumed)}</b></td>
-    <td></td>
-    <td><b>${fmt(totalValue)}</b></td>
-    <td></td>`;
 }
 // Which months count for the Yearly Summary view.
 // Default: 2026 starts at May (Jan-Apr is historical seed); other years start at Jan.
@@ -2130,24 +2202,31 @@ function buildSummaryText(m){
   if (r.oi) txt += `• Other Income: ${fmt(r.oi)}\n`;
   txt += `• *Net Profit (Est.): ${fmt(r.np)}*  (NP %: ${pct(r.np,r.sales)})\n`;
 
-  // Product Consumption (top items by value for the selected month)
+  // Product Consumption (site-wise totals + deviation per product, for the selected month)
   const yd = state.years[state.currentYear];
   if (yd && yd.products && yd.products.length && yd.consumption && yd.consumption[m]){
     const rows = yd.products.map(p => {
-      const rec = yd.consumption[m][p.id] || {};
-      return { name: p.name, unit: p.unit, qty: consumedQty(rec), val: consumedValue(rec) };
-    }).filter(x => x.qty > 0 || x.val > 0)
-      .sort((a,b) => b.val - a.val);
+      const rec = yd.consumption[m][p.id];
+      if (!rec || rec.sites === undefined) return null;
+      return {
+        name: p.name, unit: p.unit || "kg",
+        total:    consumptionTotalSites(rec),
+        purchase: num(rec.purchase),
+        wastage:  num(rec.wastage),
+        staff:    num(rec.staffFood),
+        deviation: consumptionDeviation(rec),
+        devPct:    consumptionDeviationPct(rec),
+        red:       consumptionIsRed(rec)
+      };
+    }).filter(x => x && (x.total > 0 || x.purchase > 0));
     if (rows.length){
-      let totalVal = 0;
       txt += `\n*Product Consumption (${m}):*\n`;
-      rows.slice(0, 8).forEach(p => {
-        totalVal += p.val;
-        txt += `• ${p.name}: ${fmt0(p.qty)} ${p.unit} — ${fmt(p.val)}\n`;
+      rows.forEach(p => {
+        const flag = p.red ? " 🔴" : "";
+        txt += `• ${p.name}: Used ${fmt0(p.total)} ${p.unit} · Purchase ${fmt0(p.purchase)} · Waste ${fmt0(p.wastage)} · Staff ${fmt0(p.staff)} · Dev ${fmt0(p.deviation)} ${p.unit} (${p.devPct.toFixed(2)}%)${flag}\n`;
       });
-      const allVal = rows.reduce((s,p)=> s + p.val, 0);
-      if (rows.length > 8) txt += `_…and ${rows.length-8} more_\n`;
-      txt += `*Total Consumption Value: ${fmt(allVal)}*\n`;
+      const flagged = rows.filter(p => p.red).length;
+      if (flagged) txt += `_🔴 ${flagged} product${flagged===1?"":"s"} flagged: deviation > ${DEVIATION_THRESHOLD} kg_\n`;
     }
   }
 
@@ -2410,15 +2489,11 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
   #loginOverlay { display: none !important; }
 </style>
 <script>
-/* Patch loadState/saveAll to use /api/data instead of localStorage,
-   and user-management to use /api/auth/* instead of in-state arrays. */
 (function(){
-  // Wait for initial init to finish, then override.
   function patch(){
     if (typeof state === "undefined" || typeof saveAll !== "function") {
       return setTimeout(patch, 50);
     }
-    // ----- DATA persistence -----
     const origIngest = typeof ingestParsed === "function" ? ingestParsed : null;
     window.loadState = async function(){
       try {
@@ -2426,29 +2501,18 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
         if (origIngest) origIngest(j.data || {});
-      } catch(e) {
-        console.warn("loadState failed", e);
-      }
+      } catch(e) { console.warn("loadState failed", e); }
     };
     let saveTimer = null;
     window.saveAll = function(silent){
-      // Refresh the UI through the existing flow but route persistence to the server.
       if (typeof refreshAll === "function") {
         const snap = typeof snapshotFocus === "function" ? snapshotFocus() : null;
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(async () => {
           try {
-            const body = {
-              currentYear: state.currentYear,
-              years: state.years,
-              editMode: state.editMode
-            };
-            const r = await fetch("/api/data", {
-              method: "PUT",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ data: body })
-            });
+            const body = { currentYear: state.currentYear, years: state.years, editMode: state.editMode };
+            const r = await fetch("/api/data", { method: "PUT", credentials: "same-origin",
+              headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: body }) });
             if (!r.ok) console.warn("save failed", r.status);
             else if (!silent && typeof flash === "function") flash("✓ Saved to server");
           } catch (e) {
@@ -2460,8 +2524,6 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
         if (snap && typeof restoreFocus === "function") restoreFocus(snap);
       }
     };
-
-    // ----- USER MANAGEMENT (admin only) — proxy to /api/auth/users + /api/auth/authorized -----
     window.createUser = async function(){
       const emailEl = document.getElementById("createUserEmail");
       const pwEl    = document.getElementById("createUserPassword");
@@ -2470,11 +2532,8 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
       const password = pwEl.value;
       const role = roleEl.value === "admin" ? "admin" : "user";
       if (!email || !password) { alert("Email and password required"); return; }
-      const r = await fetch("/api/auth/users", {
-        method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role })
-      });
+      const r = await fetch("/api/auth/users", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, role }) });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Failed"); return; }
       emailEl.value = ""; pwEl.value = ""; roleEl.value = "user";
@@ -2484,8 +2543,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
     window.removeUser = async function(email){
       if (!confirm("Delete user " + email + "?")) return;
       const r = await fetch("/api/auth/users?email=" + encodeURIComponent(email), {
-        method: "DELETE", credentials: "same-origin"
-      });
+        method: "DELETE", credentials: "same-origin" });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Failed"); return; }
       flash("✓ Deleted: " + email);
@@ -2494,31 +2552,22 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
     window.resetUserPassword = async function(email){
       const np = prompt("New password for " + email + ":");
       if (!np || np.length < 4) return;
-      const r = await fetch("/api/auth/users", {
-        method: "PATCH", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: np })
-      });
+      const r = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: np }) });
       if (r.ok) flash("✓ Password reset for " + email); else alert("Failed");
     };
     window.promoteUser = async function(email){
       const u = (state.auth?.users?.[email]?.role) === "admin" ? "user" : "admin";
-      const r = await fetch("/api/auth/users", {
-        method: "PATCH", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role: u })
-      });
+      const r = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role: u }) });
       if (r.ok) { flash("✓ Role updated"); await reloadAuthLists(); }
     };
     window.addAuthorizedEmail = async function(){
       const inp = document.getElementById("authNewEmail");
       const email = inp.value.trim().toLowerCase();
       if (!email) return;
-      const r = await fetch("/api/auth/authorized", {
-        method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
+      const r = await fetch("/api/auth/authorized", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Failed"); return; }
       inp.value = "";
@@ -2528,8 +2577,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
     window.removeAuthorized = async function(email){
       if (!confirm("Remove " + email + " from authorized list?")) return;
       const r = await fetch("/api/auth/authorized?email=" + encodeURIComponent(email), {
-        method: "DELETE", credentials: "same-origin"
-      });
+        method: "DELETE", credentials: "same-origin" });
       if (r.ok) { flash("✓ Removed"); await reloadAuthLists(); }
     };
     window.logout = async function(){
@@ -2537,7 +2585,6 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
       await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
       location.href = "/login";
     };
-
     async function reloadAuthLists(){
       if (!state.auth) state.auth = { users: {}, authorizedEmails: [], session: state.auth?.session };
       try {
@@ -2557,9 +2604,6 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
       } catch(e){}
       if (typeof renderAuthPanel === "function") renderAuthPanel();
     }
-
-    // ----- INIT -----
-    // Replace the existing init flow: fetch /api/auth/me to set session, then load data.
     (async function(){
       try {
         const me = await fetch("/api/auth/me", { credentials: "same-origin" });
@@ -2571,9 +2615,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
         if (typeof hideLogin === "function") hideLogin();
         if (typeof refreshAll === "function") refreshAll();
         if (state.auth.session.role === "admin") await reloadAuthLists();
-      } catch(e){
-        console.error("init error", e);
-      }
+      } catch(e){ console.error("init error", e); }
     })();
   }
   patch();
