@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const email = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "");
-  const role = body?.role === "admin" ? "admin" : "user";
+  const role = ["admin","manager","creator","user"].includes(body?.role) ? body.role : "user";
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: "Invalid email" }, { status: 400 });
   if (password.length < 4) return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
 
@@ -42,7 +42,7 @@ export async function PATCH(req: Request) {
   const email = String(body?.email || "").trim().toLowerCase();
   if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
   const updates: any = {};
-  if (body?.role === "admin" || body?.role === "user") updates.role = body.role;
+  if (["admin","manager","creator","user"].includes(body?.role)) updates.role = body.role;
   if (typeof body?.password === "string" && body.password.length >= 4) {
     updates.passwordHash = await hashPassword(body.password);
   }

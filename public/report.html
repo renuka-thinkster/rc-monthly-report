@@ -6,6 +6,7 @@
 <title>Rolling Crunchys — Daily & Monthly MIS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#0f172a; --muted:#64748b;
@@ -113,6 +114,15 @@
   .derived-cell{background:var(--derived);color:#155e75;font-weight:600}
   .manual-cell input{background:var(--manual)}
   .scroll-x{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:white}
+  /* Make horizontal scrollbars clearly visible (esp. for wide tables like Employee Incentive) */
+  .scroll-x{scrollbar-width:auto;scrollbar-color:#b45309 #f1f5f9}
+  .scroll-x::-webkit-scrollbar{height:12px}
+  .scroll-x::-webkit-scrollbar-track{background:#f1f5f9;border-radius:6px}
+  .scroll-x::-webkit-scrollbar-thumb{background:#b45309;border-radius:6px;border:2px solid #f1f5f9}
+  .scroll-x::-webkit-scrollbar-thumb:hover{background:#7c2d12}
+  /* Employee Incentive table is wide — force a min-width so it always scrolls, and never wrap cells */
+  #incTable{min-width:1500px}
+  #incTable th,#incTable td{white-space:nowrap}
   .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
   .modal.show{display:flex}
   .modal-body{background:white;border-radius:12px;padding:18px;max-width:600px;width:100%;max-height:85vh;overflow:auto}
@@ -209,6 +219,7 @@
       <span class="tab section-head">Daily:</span>
       <button class="tab" data-tab="daily">📅 Daily Sales</button>
       <button class="tab" data-tab="prod">📦 Product Consumption</button>
+      <button class="tab" data-tab="incentive">💰 Employee Incentive</button>
       <span class="tab section-head">Derived:</span>
       <button class="tab" data-tab="mi">Monthly Input</button>
       <button class="tab" data-tab="ys">Yearly Summary</button>
@@ -421,6 +432,67 @@
       </div>
     </div>
 
+    <!-- ============== EMPLOYEE INCENTIVE SHEET ============== -->
+    <div class="panel" id="panel-incentive">
+      <h3 class="section-title">💰 Employee Incentive Sheet</h3>
+      <div class="help">
+        <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
+        <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
+        Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
+        <b>Final Incentive</b> = Absent → 0 · else Fix Incentive (if set) · else Mgr Override (if set) · else Pro-rated.
+        Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
+      </div>
+      <div class="toolbar" style="margin-bottom:8px">
+        <label class="small" style="display:flex;align-items:center;gap:5px">Month:
+          <select id="incMonthPicker" onchange="renderIncentive()"></select>
+        </label>
+        <span id="incApprovalStatus" class="small"></span>
+        <button class="btn btn-primary" id="incAddBtn" onclick="addIncentiveEmployee()">+ Add Employee</button>
+        <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names &amp; codes from another month">📋 Copy Employees</button>
+        <button class="btn btn-secondary" id="incApproveBtn" onclick="toggleIncentiveApproval()"></button>
+        <button class="btn btn-secondary" onclick="exportIncentiveExcel()">📥 Download Excel</button>
+        <button class="btn btn-wa" onclick="shareIncentiveWA()">💬 Send via WhatsApp</button>
+      </div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Total Incentive (pool ₹):
+          <input type="text" inputmode="decimal" class="numinput" id="incTotalIncentive" style="width:110px"/>
+        </label>
+        <label class="small" style="margin-left:10px">Days in month:
+          <input type="text" inputmode="decimal" class="numinput" id="incDays" style="width:55px"/>
+        </label>
+        <label class="small" style="margin-left:10px">Incentive Date:
+          <input type="date" id="incDate" style="padding:5px 7px;font-size:12px"/>
+        </label>
+        <span id="incTotalPayout" class="small" style="margin-left:auto;font-weight:700"></span>
+      </div>
+      <div class="scroll-x">
+        <table id="incTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Emp Code</th>
+              <th>Incentive</th>
+              <th style="min-width:110px;width:110px">Year-Month</th>
+              <th style="min-width:110px;width:110px">Incentive Date</th>
+              <th>Section</th>
+              <th>%<br/><span class="small" style="font-weight:normal">whole no. — 12 = 12%</span></th>
+              <th>Calculated<br/><span class="small" style="font-weight:normal">Total × % ÷ 100</span></th>
+              <th>Per Day<br/><span class="small" style="font-weight:normal">Calc ÷ days</span></th>
+              <th>Leave Days</th>
+              <th>Present Days</th>
+              <th>Actual Incentive<br/><span class="small" style="font-weight:normal">PerDay × Present · editable</span></th>
+              <th>Fix Incentive</th>
+              <th>Absent</th>
+              <th>Remark</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="incBody"></tbody>
+          <tfoot><tr class="total-row" id="incTotalRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
     <!-- ============== MONTHLY INPUT (derived + manual) ============== -->
     <div class="panel" id="panel-mi">
       <h3 class="section-title">Monthly Input — Derived &amp; Manual</h3>
@@ -515,7 +587,7 @@
           <div class="chart-wrap"><canvas id="chartProfit"></canvas></div>
         </div>
         <div class="card" style="margin:0">
-          <h4 style="margin:0 0 8px">% Food Cost — month over month</h4>
+          <h4 style="margin:0 0 8px">% Food Cost — month over month <span class="small" style="font-weight:normal;color:var(--muted)">(🔴 &gt;37% · 🟢 ≤37%)</span></h4>
           <div class="chart-wrap"><canvas id="chartFCpct"></canvas></div>
         </div>
         <div class="card" style="margin:0">
@@ -549,8 +621,10 @@
         <input type="email" id="createUserEmail" placeholder="email@example.com" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px"/>
         <input type="password" id="createUserPassword" placeholder="password" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px"/>
         <select id="createUserRole" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px">
-          <option value="user">user</option>
-          <option value="admin">admin</option>
+          <option value="user">user (read-only)</option>
+          <option value="creator">creator (adds employees, leave, absent, fix incentive)</option>
+          <option value="manager">manager (sets total, %, override)</option>
+          <option value="admin">admin (full access + approve)</option>
         </select>
         <button class="btn btn-primary" onclick="createUser()">+ Create User</button>
       </div>
@@ -570,10 +644,23 @@
         </table>
       </div>
 
-      <h4>Registered Users <span class="small" style="font-weight:normal;color:var(--muted)">— delete, reset password, or toggle admin</span></h4>
+      <h4>💰 Incentive Workflow Roles <span class="small" style="font-weight:normal;color:var(--muted)">— designate who creates and who approves the Employee Incentive sheet</span></h4>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;background:#fffbeb;border:1px dashed #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:6px">
+        <label class="small" style="display:flex;align-items:center;gap:6px">
+          ✍️ <b>Incentive Creator</b>:
+          <select id="incCreatorSelect" onchange="setIncentiveRole('creator', this.value)" style="padding:5px 8px;font-size:12px"></select>
+        </label>
+        <label class="small" style="display:flex;align-items:center;gap:6px">
+          🏅 <b>Incentive Approver</b>:
+          <select id="incApproverSelect" onchange="setIncentiveRole('approver', this.value)" style="padding:5px 8px;font-size:12px"></select>
+        </label>
+      </div>
+      <div class="small" style="color:var(--muted);margin-bottom:4px">The designated <b>Creator</b> can add employees / leave / absent / fix incentive. The designated <b>Approver</b> can approve &amp; lock the sheet. Admins always have both powers.</div>
+
+      <h4>Registered Users <span class="small" style="font-weight:normal;color:var(--muted)">— delete, reset password, change role; incentive designations shown as badges</span></h4>
       <div class="scroll-x">
         <table>
-          <thead><tr><th>Email</th><th>Role</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+          <thead><tr><th>Email</th><th>Role</th><th>Incentive</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
           <tbody id="authUsersBody"></tbody>
         </table>
       </div>
@@ -844,7 +931,8 @@ function makeYearData(y){
     // 2026 seed: Jan-Apr already "saved" (locked); current month & future open
     const locks = { Jan:true, Feb:true, Mar:true, Apr:true };
     return { rc: seed.rc, mn: seed.mn, daily: seedDaily(), locks,
-             products: defaultProducts2026(), consumption: { Apr: seedConsumptionApr() } };
+             products: defaultProducts2026(), consumption: { Apr: seedConsumptionApr() },
+             incentive: {} };
   }
   // Blank rc/mn for non-seed years (no pre-filled data, no locks)
   return {
@@ -853,7 +941,8 @@ function makeYearData(y){
     daily: { perDayTarget: 107000, entries: [] },
     locks: {},
     products: [],
-    consumption: {}
+    consumption: {},
+    incentive: {}
   };
 }
 function bindYear(y){
@@ -861,6 +950,7 @@ function bindYear(y){
   if (!state.years[y].locks) state.years[y].locks = {};
   if (!state.years[y].products) state.years[y].products = y === 2026 ? defaultProducts2026() : [];
   if (!state.years[y].consumption) state.years[y].consumption = {};
+  if (!state.years[y].incentive) state.years[y].incentive = {};
   state.currentYear = y;
   state.year = y;
   state.rc = state.years[y].rc;
@@ -869,6 +959,7 @@ function bindYear(y){
   state.locks = state.years[y].locks;
   state.products = state.years[y].products;
   state.consumption = state.years[y].consumption;
+  state.incentive = state.years[y].incentive;
 }
 function switchYear(y){
   bindYear(+y);
@@ -948,6 +1039,7 @@ function loadState(){
 }
 function ingestParsed(parsed){
   state.auth = parsed.auth || { users:{}, authorizedEmails:[], session:null };
+  if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
   state.editMode = !!parsed.editMode;
   if (parsed.years && typeof parsed.years === "object" && Object.keys(parsed.years).length){
     state.years = parsed.years;
@@ -1649,10 +1741,20 @@ function renderDashboard(){
     ]},
     options:{responsive:true,maintainAspectRatio:false}
   });
+  // Food Cost % bars: red when above 37% (over-budget), green when 37% or below.
+  const FC_THRESHOLD = 37;
+  const fcColors = fcPct.map(v => v > FC_THRESHOLD ? "#dc2626" : "#16a34a");
   charts.chartFCpct = new Chart(document.getElementById("chartFCpct"), {
     type:"bar",
-    data:{labels:MONTHS, datasets:[{label:"FC %", data:fcPct, backgroundColor:"#7c2d12"}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+"%"}}}}
+    data:{labels:MONTHS, datasets:[{label:"FC %", data:fcPct, backgroundColor:fcColors}]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c => `FC ${c.parsed.y.toFixed(2)}%  ${c.parsed.y>FC_THRESHOLD?"🔴 over 37%":"🟢 within 37%"}`}}
+      },
+      scales:{y:{ticks:{callback:v=>v+"%"}}}
+    }
   });
   charts.chartStore = new Chart(document.getElementById("chartStore"), {
     type:"doughnut",
@@ -1694,6 +1796,7 @@ function refreshAll(){
   renderTargets();
   renderDaily();
   renderProducts();
+  renderIncentive();
   renderMonthlyInput();
   renderYearly();
   renderDashboard();
@@ -1781,6 +1884,394 @@ function defaultTargetAsOfDate(m){
   }
   return `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDayNum).padStart(2,"0")}`;
 }
+/* ====================================================================== */
+/*  EMPLOYEE INCENTIVE SHEET                                               */
+/* ====================================================================== */
+const INCENTIVE_SECTIONS = ["Kitchen","Café","Truck","Store","TCS","RC Express","Events","Other"];
+
+// Role helpers (roles: admin > manager > creator > user)
+function userRole(){ return (state.auth && state.auth.session && state.auth.session.role) || "user"; }
+function isManagerRole(){ const r = userRole(); return r === "admin" || r === "manager"; }
+function isCreatorRole(){ const r = userRole(); return r === "admin" || r === "manager" || r === "creator"; }
+function currentEmail(){ return (state.auth && state.auth.session && state.auth.session.email) || ""; }
+// Designated incentive-workflow people (set by admin in the Authorize tab).
+// Admins always qualify; the designated person also qualifies regardless of base role.
+function incentiveRolesObj(){ return (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" }; }
+function isIncentiveApprover(){ return isAdmin() || (currentEmail() && currentEmail() === incentiveRolesObj().approver); }
+function isIncentiveCreator(){ return isCreatorRole() || (currentEmail() && currentEmail() === incentiveRolesObj().creator); }
+function setIncentiveRole(kind, email){
+  if (!isAdmin()){ alert("Only an admin can set incentive workflow roles."); return; }
+  if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
+  state.auth.incentiveRoles[kind] = email || "";
+  saveAll();
+}
+
+function newEmpId(){ return "emp_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
+function blankIncentiveEmployee(){
+  return {
+    id: newEmpId(),
+    name: "", code: "", section: "Kitchen",
+    pct: 0,              // employee's % (decimal — 0.12 = 12%)
+    leaveDays: 0,        // incharge / creator
+    absent: false,       // incharge / creator
+    remark: "",          // incharge / creator
+    fixIncentive: "",    // incharge / creator — supersedes all calculation when set
+    actualOverride: ""   // admin round-off — when set, replaces the computed Actual Incentive
+  };
+}
+function blankIncentiveMonth(m){
+  const monthIdx = MONTHS.indexOf(m);
+  const lastDay = new Date(state.currentYear, monthIdx+1, 0).getDate();
+  return {
+    approved: false, approvedBy: "", approvedAt: null,
+    days: lastDay,
+    totalIncentive: 0,   // shared pool for the whole month (manager enters)
+    incentiveDate: `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`,
+    employees: []
+  };
+}
+function ensureIncentiveMonth(m){
+  if (!state.incentive) state.incentive = {};
+  if (!state.incentive[m]) state.incentive[m] = blankIncentiveMonth(m);
+  if (state.incentive[m].totalIncentive === undefined) state.incentive[m].totalIncentive = 0;
+  return state.incentive[m];
+}
+// Per-employee incentive calculation.
+//   % is entered as a WHOLE NUMBER (12 means 12%).
+//   Calculated Incentive = monthTotalIncentive × emp% ÷ 100
+//   Per Day              = Calculated ÷ days in month
+//   Present Days         = days in month − Leave Days
+//   Actual Incentive     = Per Day × Present Days  (admin can override/round in-place)
+//   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
+function incentiveCalc(emp, monthDays, monthTotalIncentive){
+  const days = num(monthDays) || 30;
+  const calc = num(monthTotalIncentive) * num(emp.pct) / 100;   // Total × emp% ÷ 100
+  const perDay = days > 0 ? calc / days : 0;
+  const presentDays = Math.max(0, days - num(emp.leaveDays));
+  const computedActual = perDay * presentDays;
+  const hasOverride = emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined;
+  const actualIncentive = hasOverride ? num(emp.actualOverride) : computedActual;
+  const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
+  let final;
+  if (emp.absent) final = 0;
+  else if (hasFix) final = num(emp.fixIncentive);
+  else final = actualIncentive;
+  return { calc, perDay, presentDays, computedActual, actualIncentive, final, hasFix, hasOverride };
+}
+// Is the incentive sheet editable for a given field type? "creator" | "manager"
+function incentiveCanEdit(mData, fieldType){
+  if (mData && mData.approved) return isIncentiveApprover();   // after approval — admin / designated approver only
+  if (fieldType === "manager") return isManagerRole() || isIncentiveApprover();
+  return isIncentiveCreator(); // creator fields — admin/manager/creator OR designated creator
+}
+function addIncentiveEmployee(){
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (mData.approved && !isIncentiveApprover()){ alert("This sheet is approved — only an admin / the designated approver can modify it."); return; }
+  if (!isIncentiveCreator()){ alert("Only the incentive creator (or a manager / admin) can add employees."); return; }
+  const name = prompt("Employee name:");
+  if (!name || !name.trim()) return;
+  const code = prompt("Employee code / number:", "") || "";
+  const emp = blankIncentiveEmployee();
+  emp.name = name.trim();
+  emp.code = code.trim();
+  mData.employees.push(emp);
+  saveAll();
+}
+function removeIncentiveEmployee(empId){
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (mData.approved && !isIncentiveApprover()){ alert("This sheet is approved — only an admin / the designated approver can modify it."); return; }
+  if (!isIncentiveCreator()){ alert("Not allowed."); return; }
+  if (!confirm("Remove this employee from the sheet?")) return;
+  mData.employees = mData.employees.filter(e => e.id !== empId);
+  saveAll();
+}
+function toggleIncentiveApproval(){
+  if (!isIncentiveApprover()){ alert("Only an admin or the designated Incentive Approver can approve / re-open the sheet."); return; }
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (mData.approved){
+    if (!confirm("Re-open this approved sheet for editing?")) return;
+    mData.approved = false; mData.approvedBy = ""; mData.approvedAt = null;
+    saveAll();
+  } else {
+    if (!confirm("Approve this incentive sheet?\n\nOnce approved, only an admin / the designated approver can modify it.")) return;
+    mData.approved = true;
+    mData.approvedBy = (state.auth && state.auth.session && state.auth.session.email) || "admin";
+    mData.approvedAt = Date.now();
+    saveAll();
+    // Offer to notify the creator & finance manager on WhatsApp
+    if (confirm("✅ Sheet approved.\n\nSend a WhatsApp message to the Incentive Creator & Finance Manager that the sheet is approved and ready to process?")){
+      notifyIncentiveApproval(m);
+    }
+  }
+}
+// Build & open a WhatsApp notification that the incentive sheet is approved.
+function notifyIncentiveApproval(m){
+  const mData = ensureIncentiveMonth(m);
+  const rows = incentiveRows(m);
+  const totalPayout = rows.reduce((s,r)=> s + r.final, 0);
+  const ir = incentiveRolesObj();
+  let txt = `*✅ RC Employee Incentive Sheet — APPROVED*\n\n`;
+  txt += `Month: *${m} ${state.currentYear}*\n`;
+  txt += `Approved by: ${mData.approvedBy || "admin"}\n`;
+  txt += `Employees: ${rows.length}\n`;
+  txt += `Total Payout: *${fmt(totalPayout)}*\n\n`;
+  if (ir.creator)  txt += `✍️ Creator: ${ir.creator}\n`;
+  txt += `💼 Finance Manager: please process the incentive *in batches*.\n\n`;
+  txt += `The sheet is now locked — only an admin / the designated approver can change it.\n`;
+  txt += `_Open the RC report → Employee Incentive tab → Download Excel for the full sheet._`;
+  const encoded = encodeURIComponent(txt);
+
+  // Ask for the WhatsApp number(s) — pre-filled with whatever was used last time.
+  if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
+  const saved = state.auth.incentiveRoles.notifyPhones || "";
+  const input = prompt(
+    "Enter WhatsApp number(s) to send this to — with country code, e.g. 919876543210.\n" +
+    "Separate multiple numbers with a comma. Leave blank to just open WhatsApp and pick the contact yourself.",
+    saved
+  );
+  if (input === null) return;  // cancelled — don't send
+  // Remember for next time
+  state.auth.incentiveRoles.notifyPhones = input;
+  saveAll(true);
+
+  const numbers = input.split(",")
+    .map(s => s.replace(/[^\d]/g, ""))   // keep digits only
+    .filter(Boolean);
+  if (numbers.length === 0){
+    // No number given — open the generic share sheet
+    window.open(`https://wa.me/?text=${encoded}`, "_blank");
+  } else {
+    // Open a WhatsApp chat for each number
+    numbers.forEach(n => window.open(`https://wa.me/${n}?text=${encoded}`, "_blank"));
+  }
+}
+function incentiveMonthDays(m){
+  const mData = state.incentive && state.incentive[m];
+  if (mData && num(mData.days)) return num(mData.days);
+  const monthIdx = MONTHS.indexOf(m);
+  return new Date(state.currentYear, monthIdx+1, 0).getDate();
+}
+function renderIncentive(){
+  const sel = document.getElementById("incMonthPicker");
+  if (!sel) return;
+  sel.innerHTML = MONTHS.map(mm => `<option value="${mm}" ${mm===(sel.value||CURRENT_MONTH)?"selected":""}>${mm} ${state.currentYear}</option>`).join("");
+  const m = sel.value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  const days = num(mData.days) || incentiveMonthDays(m);
+  const ym = `${state.currentYear}-${String(MONTHS.indexOf(m)+1).padStart(2,"0")}`;
+  const approved = !!mData.approved;
+  const canCreator = incentiveCanEdit(mData, "creator");
+  const canManager = incentiveCanEdit(mData, "manager");
+  const cDis = canCreator ? "" : "disabled";
+  const mDis = canManager ? "" : "disabled";
+
+  // Approval status + button
+  const statusEl = document.getElementById("incApprovalStatus");
+  if (statusEl){
+    statusEl.innerHTML = approved
+      ? `<span style="color:#16a34a;font-weight:700">✅ Approved</span> <span style="color:var(--muted)">by ${mData.approvedBy||"admin"}</span>`
+      : `<span style="color:#b45309;font-weight:700">⏳ Not approved — open for editing</span>`;
+  }
+  const approveBtn = document.getElementById("incApproveBtn");
+  if (approveBtn){
+    if (!isIncentiveApprover()){ approveBtn.style.display = "none"; }
+    else {
+      approveBtn.style.display = "";
+      approveBtn.innerHTML = approved ? "🔓 Re-open Sheet" : "✅ Approve Sheet";
+      approveBtn.classList.toggle("btn-danger", approved);
+      approveBtn.classList.toggle("btn-primary", !approved);
+      approveBtn.classList.toggle("btn-secondary", false);
+    }
+  }
+  const addBtn = document.getElementById("incAddBtn");
+  if (addBtn) addBtn.disabled = !canCreator;
+  const copyBtn = document.getElementById("incCopyBtn");
+  if (copyBtn) copyBtn.disabled = !canCreator;
+
+  // Shared Total Incentive pool (manager)
+  const totInp = document.getElementById("incTotalIncentive");
+  if (totInp){
+    totInp.value = mData.totalIncentive;
+    totInp.disabled = !canManager;
+    totInp.oninput = e => { mData.totalIncentive = num(e.target.value); saveAll(true); };
+  }
+  // Days + date inputs
+  const daysInp = document.getElementById("incDays");
+  if (daysInp){
+    daysInp.value = mData.days;
+    daysInp.disabled = !canManager;
+    daysInp.oninput = e => { mData.days = num(e.target.value); saveAll(true); };
+  }
+  const dateInp = document.getElementById("incDate");
+  if (dateInp){
+    dateInp.value = mData.incentiveDate || "";
+    dateInp.disabled = !canCreator;
+    dateInp.onchange = e => { mData.incentiveDate = e.target.value; saveAll(true); };
+  }
+
+  // Body rows
+  const tbody = document.getElementById("incBody");
+  if (!mData.employees.length){
+    tbody.innerHTML = `<tr><td colspan="16" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names &amp; codes from another month.</td></tr>`;
+    document.getElementById("incTotalRow").innerHTML = "";
+    document.getElementById("incTotalPayout").textContent = "";
+    return;
+  }
+  let html = "";
+  let totalPayout = 0;
+  mData.employees.forEach(emp => {
+    const c = incentiveCalc(emp, days, mData.totalIncentive);
+    totalPayout += c.final;
+    const finalCls = emp.absent ? "badge-bad" : "badge-good";
+    const pctDisp = emp.pct;  // shown as decimal
+    html += `<tr${emp.absent?' style="background:#fef2f2"':''}>
+      <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(emp.code||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="code" ${cDis} style="width:100px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td class="derived-cell ${finalCls}"><b>${fmt(c.final)}</b></td>
+      <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${ym}</td>
+      <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
+      <td><select data-eid="${emp.id}" data-ef="section" ${cDis} style="padding:4px;font-size:11.5px">${INCENTIVE_SECTIONS.map(s=>`<option ${s===emp.section?"selected":""}>${s}</option>`).join("")}</select></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${pctDisp}" data-eid="${emp.id}" data-ef="pct" ${mDis} title="Whole number — type 12 for 12%" placeholder="e.g. 12"/></td>
+      <td class="derived-cell" title="Total Incentive × % ÷ 100">${fmt(c.calc)}</td>
+      <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
+      <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Per Day × Present Days = ${Math.round(c.computedActual)}. Admin/manager can type here to round off." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
+      <td style="text-align:center"><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/></td>
+      <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td>${(canCreator) ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeIncentiveEmployee('${emp.id}')" title="Remove employee">🗑️</button>` : ''}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  // Wire inputs
+  document.getElementById("incTable").querySelectorAll("tbody input,tbody select").forEach(inp => {
+    const evt = (inp.type === "checkbox" || inp.tagName === "SELECT") ? "change" : "input";
+    inp.addEventListener(evt, e => {
+      const eid = e.target.dataset.eid;
+      const ef = e.target.dataset.ef;
+      if (!eid || !ef) return;
+      const emp = mData.employees.find(x => x.id === eid);
+      if (!emp) return;
+      if (ef === "absent") emp.absent = e.target.checked;
+      else if (ef === "name" || ef === "code" || ef === "remark" || ef === "section") emp[ef] = e.target.value;
+      else if (ef === "fixIncentive" || ef === "actualOverride") emp[ef] = e.target.value; // keep raw ("" = unset → auto)
+      else emp[ef] = num(e.target.value);
+      saveAll(true);
+    });
+  });
+  // Total row
+  document.getElementById("incTotalRow").innerHTML = `
+    <td colspan="2"><b>TOTAL — ${mData.employees.length} employee${mData.employees.length===1?"":"s"}</b></td>
+    <td><b>${fmt(totalPayout)}</b></td>
+    <td colspan="13"></td>`;
+  document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt(totalPayout)}`;
+}
+// Copy base employee info (name, code, section, %) from another month into the current month.
+function copyIncentiveEmployees(){
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (mData.approved && !isIncentiveApprover()){ alert("This sheet is approved — only an admin / the designated approver can modify it."); return; }
+  if (!isIncentiveCreator()){ alert("Not allowed."); return; }
+  // Find months (in this year) that have employees
+  const sourceMonths = MONTHS.filter(mm => mm !== m && state.incentive[mm] && state.incentive[mm].employees && state.incentive[mm].employees.length);
+  if (!sourceMonths.length){ alert("No other month in " + state.currentYear + " has employees to copy from."); return; }
+  const src = prompt("Copy employee names/codes from which month?\nAvailable: " + sourceMonths.join(", "), sourceMonths[sourceMonths.length-1]);
+  if (src === null) return;
+  const srcMonth = (src||"").trim();
+  if (!state.incentive[srcMonth] || !state.incentive[srcMonth].employees || !state.incentive[srcMonth].employees.length){
+    alert("No employees found in " + srcMonth + ".");
+    return;
+  }
+  const existingCodes = new Set(mData.employees.map(e => (e.code||"").trim().toLowerCase()).filter(Boolean));
+  const existingNames = new Set(mData.employees.map(e => (e.name||"").trim().toLowerCase()));
+  let added = 0;
+  state.incentive[srcMonth].employees.forEach(srcEmp => {
+    const codeKey = (srcEmp.code||"").trim().toLowerCase();
+    const nameKey = (srcEmp.name||"").trim().toLowerCase();
+    // Skip duplicates (same code, or same name when code blank)
+    if (codeKey && existingCodes.has(codeKey)) return;
+    if (!codeKey && existingNames.has(nameKey)) return;
+    const e = blankIncentiveEmployee();
+    e.name = srcEmp.name; e.code = srcEmp.code; e.section = srcEmp.section || "Kitchen";
+    e.pct = num(srcEmp.pct);   // % is fairly stable month-to-month — copy as a starting point
+    // leaveDays, absent, remark, fixIncentive, actualOverride all stay blank for the new month
+    mData.employees.push(e);
+    if (codeKey) existingCodes.add(codeKey);
+    existingNames.add(nameKey);
+    added++;
+  });
+  flash(`✓ Copied ${added} employee${added===1?"":"s"} from ${srcMonth}`);
+  saveAll();
+}
+// Build the export rows (shared by Excel + WhatsApp)
+function incentiveRows(m){
+  const mData = ensureIncentiveMonth(m);
+  const days = num(mData.days) || incentiveMonthDays(m);
+  const ym = `${state.currentYear}${String(MONTHS.indexOf(m)+1).padStart(2,"0")}`;
+  return mData.employees.map(emp => {
+    const c = incentiveCalc(emp, days, mData.totalIncentive);
+    return {
+      name: emp.name, code: emp.code, final: c.final, ym,
+      date: mData.incentiveDate, section: emp.section,
+      pct: num(emp.pct),
+      calc: c.calc, perDay: c.perDay, leave: num(emp.leaveDays),
+      presentDays: c.presentDays, actual: c.actualIncentive,
+      fix: emp.fixIncentive, absent: emp.absent, remark: emp.remark
+    };
+  });
+}
+function exportIncentiveExcel(){
+  if (typeof XLSX === "undefined"){ alert("Excel library still loading — try again in a moment."); return; }
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  const rows = incentiveRows(m);
+  const header = ["Name","Employee Code","Incentive","YearMonth","Incentive Date","Section",
+                  "% Incentive","Calculated (Total×%)","Per Day","Leave Days","Present Days",
+                  "Actual Incentive","Fix Incentive","Absent","Remark","Final Incentive"];
+  const aoa = [
+    [`RC Employee Incentive — ${m} ${state.currentYear}`],
+    [`Total Incentive Pool: ${num(mData.totalIncentive)}`, `Days in month: ${num(mData.days)}`],
+    [],
+    header
+  ];
+  rows.forEach(r => aoa.push([
+    r.name, r.code, r.final, r.ym, r.date, r.section,
+    r.pct, r.calc, r.perDay, r.leave, r.presentDays,
+    r.actual, r.fix, r.absent ? "Yes" : "No", r.remark, r.final
+  ]));
+  const totalPayout = rows.reduce((s,r)=> s + r.final, 0);
+  aoa.push([]);
+  aoa.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOTAL", totalPayout]);
+  if (mData.approved) aoa.push([`Approved by ${mData.approvedBy} on ${mData.approvedAt? new Date(mData.approvedAt).toLocaleDateString() : ""}`]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${m} ${state.currentYear}`);
+  XLSX.writeFile(wb, `RC_Incentive_${m}_${state.currentYear}.xlsx`);
+  flash("✓ Excel downloaded");
+}
+function shareIncentiveWA(){
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  const rows = incentiveRows(m);
+  // Trigger the Excel download so the user can attach it in WhatsApp
+  exportIncentiveExcel();
+  let txt = `*🥨 RC Employee Incentive — ${m} ${state.currentYear}*\n`;
+  if (mData.approved) txt += `_✅ Approved by ${mData.approvedBy}_\n`;
+  txt += `\n`;
+  let total = 0;
+  rows.forEach(r => {
+    total += r.final;
+    txt += `• ${r.name}${r.absent?" — ABSENT":""}: ${fmt(r.final)}\n`;
+  });
+  txt += `\n*Total Payout: ${fmt(total)}*  ·  ${rows.length} employees\n`;
+  txt += `_The Excel file has been downloaded — attach it in WhatsApp to send the full sheet._`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+}
+
 /* ===== Product Consumption (site-wise per spreadsheet structure) ===== */
 function newProductId(){ return "p_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
 function ensureProductMonth(m){
@@ -2430,7 +2921,7 @@ async function createUser(){
   const roleEl  = document.getElementById("createUserRole");
   const email = emailEl.value.trim().toLowerCase();
   const pw    = pwEl.value;
-  const role  = roleEl.value === "admin" ? "admin" : "user";
+  const role  = ["admin","manager","creator","user"].includes(roleEl.value) ? roleEl.value : "user";
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert("Enter a valid email"); emailEl.focus(); return; }
   if (!pw || pw.length < 4){ alert("Password must be at least 4 characters"); pwEl.focus(); return; }
   if (state.auth.users[email]){ alert("A user with this email already exists. Use Reset PW or Remove instead."); return; }
@@ -2474,7 +2965,12 @@ function removeUser(email){
 }
 function promoteUser(email){
   if (!isAdmin()) return;
-  state.auth.users[email].role = state.auth.users[email].role === "admin" ? "user" : "admin";
+  const cur = state.auth.users[email].role || "user";
+  const next = prompt("Set role for " + email + " — one of: admin, manager, creator, user", cur);
+  if (next === null) return;
+  const r = (next || "").trim().toLowerCase();
+  if (!["admin","manager","creator","user"].includes(r)){ alert("Invalid role. Use: admin, manager, creator, or user."); return; }
+  state.auth.users[email].role = r;
   saveAll();
 }
 function renderAuthPanel(){
@@ -2490,26 +2986,46 @@ function renderAuthPanel(){
     ? state.auth.authorizedEmails.map(e =>
         `<tr><td>${e}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeAuthorized('${e}')">Remove</button></td></tr>`).join("")
     : `<tr><td colspan="2" class="small" style="text-align:center;color:var(--muted)">No pending invitations</td></tr>`;
+  // Incentive workflow role dropdowns
+  const ir = incentiveRolesObj();
+  const emails = Object.keys(state.auth.users);
+  const opts = (sel) => `<option value="">— none —</option>` +
+    emails.map(e => `<option value="${e}" ${e===sel?"selected":""}>${e}</option>`).join("");
+  const cSel = document.getElementById("incCreatorSelect");
+  const aSel = document.getElementById("incApproverSelect");
+  if (cSel) cSel.innerHTML = opts(ir.creator);
+  if (aSel) aSel.innerHTML = opts(ir.approver);
+
   // Users
   const u = document.getElementById("authUsersBody");
   if (u){
     const entries = Object.entries(state.auth.users);
     u.innerHTML = entries.length ? entries.map(([email, info]) => {
       const isYou = email === state.auth.session.email;
-      const roleBadge = info.role === "admin"
-        ? '<span style="background:#fef3c7;color:#7c2d12;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">admin</span>'
-        : '<span style="background:#e0f2fe;color:#0c4a6e;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">user</span>';
+      const roleColors = {
+        admin:   "background:#fef3c7;color:#7c2d12",
+        manager: "background:#dcfce7;color:#166534",
+        creator: "background:#e0e7ff;color:#3730a3",
+        user:    "background:#e0f2fe;color:#0c4a6e"
+      };
+      const roleBadge = `<span style="${roleColors[info.role]||roleColors.user};padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">${info.role||"user"}</span>`;
+      // Incentive designation badges
+      let incBadges = "";
+      if (ir.creator === email)  incBadges += `<span style="background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:99px;font-size:10.5px;font-weight:700">✍️ Inc. Creator</span> `;
+      if (ir.approver === email) incBadges += `<span style="background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:99px;font-size:10.5px;font-weight:700">🏅 Inc. Approver</span>`;
+      if (!incBadges) incBadges = `<span class="small" style="color:var(--muted)">—</span>`;
       return `<tr>
         <td>${email}${isYou?' <span class="small" style="color:var(--good)">(you)</span>':''}</td>
         <td>${roleBadge}</td>
+        <td>${incBadges}</td>
         <td>${new Date(info.createdAt).toLocaleDateString()}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="resetUserPassword('${email}')" title="Set a new password for this user">🔑 Reset PW</button>
-          <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;margin-left:4px" onclick="promoteUser('${email}')" title="Promote to admin / demote to user">↕ Role</button>
+          <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;margin-left:4px" onclick="promoteUser('${email}')" title="Change this user's role">↕ Role</button>
           ${isYou?'<span class="small" style="color:var(--muted);margin-left:4px">(self)</span>':`<button class="btn btn-danger" style="padding:4px 9px;font-size:11px;margin-left:4px" onclick="removeUser('${email}')" title="Permanently delete this user">🗑️ Delete</button>`}
         </td>
       </tr>`;
-    }).join("") : `<tr><td colspan="4" class="small" style="text-align:center;color:var(--muted)">No users yet</td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="small" style="text-align:center;color:var(--muted)">No users yet</td></tr>`;
   }
 }
 
@@ -2524,24 +3040,25 @@ document.getElementById("loginForm")?.addEventListener("submit", e => { e.preven
 window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session){ hideLogin(); refreshAll(); } else { showLogin(); } });
 </script>
 <!-- ============== SERVER-MODE OVERRIDE (Next.js + Neon) ============== -->
-<style>
-  /* Hide the in-page login overlay since auth happens on the /login page. */
-  #loginOverlay { display: none !important; }
-</style>
+<style>#loginOverlay{display:none !important;}</style>
 <script>
 (function(){
   function patch(){
-    if (typeof state === "undefined" || typeof saveAll !== "function") {
-      return setTimeout(patch, 50);
-    }
+    if (typeof state === "undefined" || typeof saveAll !== "function") return setTimeout(patch, 50);
     const origIngest = typeof ingestParsed === "function" ? ingestParsed : null;
+
     window.loadState = async function(){
       try {
         const r = await fetch("/api/data", { credentials: "same-origin" });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
-        if (origIngest) origIngest(j.data || {});
-      } catch(e) { console.warn("loadState failed", e); }
+        const data = j.data || {};
+        if (origIngest) origIngest(data);
+        if (!state.auth) state.auth = { users:{}, authorizedEmails:[], session:null };
+        // incentiveRoles live in the shared data blob (auth tables are separate on the server)
+        if (data.incentiveRoles) state.auth.incentiveRoles = data.incentiveRoles;
+        if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
+      } catch(e){ console.warn("loadState failed", e); }
     };
     let saveTimer = null;
     window.saveAll = function(silent){
@@ -2550,7 +3067,12 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(async () => {
           try {
-            const body = { currentYear: state.currentYear, years: state.years, editMode: state.editMode };
+            const body = {
+              currentYear: state.currentYear,
+              years: state.years,
+              editMode: state.editMode,
+              incentiveRoles: (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" }
+            };
             const r = await fetch("/api/data", { method: "PUT", credentials: "same-origin",
               headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: body }) });
             if (!r.ok) console.warn("save failed", r.status);
@@ -2570,7 +3092,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
       const roleEl  = document.getElementById("createUserRole");
       const email = emailEl.value.trim().toLowerCase();
       const password = pwEl.value;
-      const role = roleEl.value === "admin" ? "admin" : "user";
+      const role = ["admin","manager","creator","user"].includes(roleEl.value) ? roleEl.value : "user";
       if (!email || !password) { alert("Email and password required"); return; }
       const r = await fetch("/api/auth/users", { method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, role }) });
@@ -2582,8 +3104,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
     };
     window.removeUser = async function(email){
       if (!confirm("Delete user " + email + "?")) return;
-      const r = await fetch("/api/auth/users?email=" + encodeURIComponent(email), {
-        method: "DELETE", credentials: "same-origin" });
+      const r = await fetch("/api/auth/users?email=" + encodeURIComponent(email), { method: "DELETE", credentials: "same-origin" });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Failed"); return; }
       flash("✓ Deleted: " + email);
@@ -2597,10 +3118,14 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
       if (r.ok) flash("✓ Password reset for " + email); else alert("Failed");
     };
     window.promoteUser = async function(email){
-      const u = (state.auth?.users?.[email]?.role) === "admin" ? "user" : "admin";
-      const r = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role: u }) });
-      if (r.ok) { flash("✓ Role updated"); await reloadAuthLists(); }
+      const cur = (state.auth && state.auth.users && state.auth.users[email] && state.auth.users[email].role) || "user";
+      const next = prompt("Set role for " + email + " — one of: admin, manager, creator, user", cur);
+      if (next === null) return;
+      const r = (next || "").trim().toLowerCase();
+      if (!["admin","manager","creator","user"].includes(r)){ alert("Invalid role."); return; }
+      const resp = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role: r }) });
+      if (resp.ok) { flash("✓ Role updated"); await reloadAuthLists(); }
     };
     window.addAuthorizedEmail = async function(){
       const inp = document.getElementById("authNewEmail");
@@ -2616,8 +3141,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
     };
     window.removeAuthorized = async function(email){
       if (!confirm("Remove " + email + " from authorized list?")) return;
-      const r = await fetch("/api/auth/authorized?email=" + encodeURIComponent(email), {
-        method: "DELETE", credentials: "same-origin" });
+      const r = await fetch("/api/auth/authorized?email=" + encodeURIComponent(email), { method: "DELETE", credentials: "same-origin" });
       if (r.ok) { flash("✓ Removed"); await reloadAuthLists(); }
     };
     window.logout = async function(){
@@ -2637,10 +3161,7 @@ window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session)
           });
         }
         const a = await fetch("/api/auth/authorized", { credentials: "same-origin" });
-        if (a.ok) {
-          const j = await a.json();
-          state.auth.authorizedEmails = j.emails || [];
-        }
+        if (a.ok) { const j = await a.json(); state.auth.authorizedEmails = j.emails || []; }
       } catch(e){}
       if (typeof renderAuthPanel === "function") renderAuthPanel();
     }
