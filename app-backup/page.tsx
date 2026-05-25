@@ -5,25 +5,25 @@ import Script from 'next/script'
 
 export default function Home() {
   useEffect(() => {
+    // Init after DOM is ready
     const init = () => {
-      const w = window as any
-      if (typeof w.initPeriodSelectors === 'function') {
-        w.initPeriodSelectors()
-        w.onGlobalChange()
-        w.rebuildDaily()
-        w.buildSalesReport()
-        w.buildInventory()
-        w.buildPurchase()
-        w.buildFoodCost()
-        w.renderMonthlyInput()
-        w.renderConsumption()
-        w.buildYearlySummary()
-        setTimeout(() => w.renderTarget?.(), 100)
-        setTimeout(() => w.renderIncentive?.(), 150)
-        setTimeout(() => w.buildCharts?.(), 200)
+      if (typeof (window as any).initPeriodSelectors === 'function') {
+        (window as any).initPeriodSelectors()
+        ;(window as any).onGlobalChange()
+        ;(window as any).rebuildDaily()
+        ;(window as any).buildSalesReport()
+        ;(window as any).buildInventory()
+        ;(window as any).buildPurchase()
+        ;(window as any).buildFoodCost()
+        ;(window as any).renderMonthlyInput()
+        ;(window as any).renderConsumption()
+        ;(window as any).buildYearlySummary()
+        setTimeout(() => (window as any).renderTarget?.(), 100)
+        setTimeout(() => (window as any).renderIncentive?.(), 150)
       }
     }
-    const timer = setTimeout(init, 400)
+    // Wait for scripts to load
+    const timer = setTimeout(init, 300)
     return () => clearTimeout(timer)
   }, [])
 
@@ -33,27 +33,7 @@ export default function Home() {
         src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
         strategy="beforeInteractive"
       />
-      <Script src="/rc-functions.js" strategy="afterInteractive" onLoad={() => {
-        const w = window as any
-        const init = () => {
-          if (typeof w.initPeriodSelectors === 'function') {
-            w.initPeriodSelectors()
-            w.onGlobalChange()
-            w.rebuildDaily()
-            w.buildSalesReport()
-            w.buildInventory()
-            w.buildPurchase()
-            w.buildFoodCost()
-            w.renderMonthlyInput()
-            w.renderConsumption()
-            w.buildYearlySummary()
-            setTimeout(() => w.renderTarget?.(), 100)
-            setTimeout(() => w.renderIncentive?.(), 150)
-            setTimeout(() => w.buildCharts?.(), 200)
-          }
-        }
-        setTimeout(init, 100)
-      }} />
+      <Script src="/rc-functions.js" strategy="afterInteractive" />
       <div dangerouslySetInnerHTML={{ __html: bodyHTML }} />
     </>
   )

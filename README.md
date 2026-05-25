@@ -1,64 +1,53 @@
-# Rolling Crunchys — Monthly Report (Next.js + Neon)
+# Rolling Crunchys — Daily & Monthly MIS
 
-Shared, multi-user monthly report. Same UI as the standalone HTML, but data lives in a Neon Postgres database and access is gated by email/password authentication.
+## Setup
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+## Build for production
+
+```bash
+npm run build
+npm start
+```
+
+## Structure
+
+```
+rc-mis/
+├── app/
+│   ├── layout.tsx        # Root layout
+│   ├── page.tsx          # Main MIS page (client component)
+│   └── globals.css       # All styles
+├── lib/
+│   ├── store.ts          # Central data store (STORE object)
+│   └── functions.ts      # All render functions
+├── public/
+│   └── rc-functions.js   # Client-side JS bundle
+└── package.json
+```
 
 ## Features
 
-All features of the standalone HTML report, plus:
+- Dashboard with live KPI cards and 7 charts
+- ① Sales Monthly Report (all 12 months, per-store)
+- ② Inventory Opening & Closing (per site × month)
+- ③ Purchase (all 12 months, YTD total)
+- ④ Food Cost (auto-derived from inventory + purchase)
+- ⑤ Target by Site (RC Express, Food Truck, Café, TCS, Events)
+- Daily Sales (unit-wise, date × payment mode)
+- Product Consumption (with deviation tracking)
+- Employee Incentive Sheet
+- Monthly Input (derived + manual)
+- Yearly Summary
+- Admin authorization
 
-- **Server-side authentication** (cookies + sessions in Postgres)
-- **Multi-user shared data** — every authenticated user sees the same numbers
-- **Admin role**: first user becomes admin; admins can create, delete, reset, and promote users
-- **Invite by email**: admin authorizes an email → user sets their own password on first login
-- **Live shareable URL** for the whole team
+## Data
 
-## Tech
-
-- Next.js 14 (App Router, Edge runtime for all API routes)
-- Neon Postgres (serverless HTTP driver via `@neondatabase/serverless`)
-- Drizzle ORM
-- Chart.js (loaded from CDN inside the report HTML)
-- Web Crypto API for password hashing (SHA-256 + per-user salt) and session tokens
-
-## Quick Start
-
-See **[DEPLOY.md](./DEPLOY.md)** for the end-to-end Neon → GitHub → Vercel guide.
-
-Local dev:
-```bash
-cp .env.example .env  # paste your Neon DATABASE_URL
-npm install
-npx drizzle-kit push  # creates the 4 tables
-npm run dev
-```
-Then open http://localhost:3000 — you'll be redirected to `/login` to create the first (admin) account.
-
-## File Structure
-
-```
-src/
-├─ app/
-│  ├─ page.tsx          ← server-checks auth, then serves /report.html in an iframe
-│  ├─ login/page.tsx    ← email/password login (also handles first-user admin signup)
-│  ├─ layout.tsx, globals.css
-│  └─ api/
-│     ├─ data/route.ts            ← GET / PUT shared JSON state
-│     └─ auth/
-│        ├─ login/route.ts        ← POST → set session cookie
-│        ├─ register/route.ts     ← POST → first user OR pre-authorized invite
-│        ├─ logout/route.ts       ← POST → clear cookie
-│        ├─ me/route.ts           ← GET current user + hasUsers flag
-│        ├─ users/route.ts        ← GET/POST/PATCH/DELETE (admin only)
-│        └─ authorized/route.ts   ← GET/POST/DELETE (admin only)
-├─ db/
-│  ├─ schema.ts                   ← app_data, users, sessions, authorized_emails
-│  └─ index.ts                    ← Drizzle + Neon
-└─ lib/
-   └─ auth.ts                     ← hashPassword, verifyPassword, sessions, cookies
-
-public/
-└─ report.html                    ← The complete report UI (Dashboard, Sales, Inventory, …,
-                                     Daily Sales, Product Consumption, Yearly Summary, Authorize).
-                                     A small server-mode override at the bottom routes data to /api/data
-                                     and user management to /api/auth/*.
-```
+All data is stored in `public/rc-functions.js` in the `STORE` object.
+Pre-loaded with Jan–May 2026 actual data for Rolling Crunchys, Infocity Bhubaneswar.

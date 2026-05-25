@@ -1,5 +1,5 @@
 // RC MIS Render Functions — Updated 2026-05-19
-import { STORE, MD_YEARLY, DEV_THRESHOLD, DAY_COLORS, MN, MN_SHORT } from './store';
+import { STORE, MN, MN_SHORT, f, flash,getGPeriod, fr, getPD } from './store';
 declare const Chart: any;
 
 
@@ -26,8 +26,8 @@ let editModeOn=false;
 
 function rebuildDaily(){
   // Read period from section selectors
-  const dsM=document.getElementById('dsMonth');
-  const dsY=document.getElementById('dsYear');
+  const dsM=document.getElementById('dsMonth') as HTMLSelectElement | null;
+  const dsY=document.getElementById('dsYear') as HTMLSelectElement | null;
   const m=dsM?parseInt(dsM.value):5;
   const y=dsY?parseInt(dsY.value):2026;
   const days=new Date(y,m,0).getDate();
@@ -35,12 +35,15 @@ function rebuildDaily(){
   const label=MN[m-1]+' '+y;
 
   // Sync global bar
-  const gM=document.getElementById('gMonth'),gY=document.getElementById('gYear');
-  if(gM)gM.value=m; if(gY)gY.value=y;
+  const gM = document.getElementById('gMonth') as HTMLSelectElement | null;
+const gY = document.getElementById('gYear') as HTMLSelectElement | null;
+  if (gM) gM.value = String(m);
+if (gY) gY.value = String(y);
   const gLbl=document.getElementById('gPeriodLabel');
   if(gLbl)gLbl.textContent=label;
 
-  const tgt=parseInt((document.getElementById('pdTarget')||{value:107000}).value)||107000;
+  const pdTarget = document.getElementById('pdTarget') as HTMLInputElement | null;
+const tgt = parseInt(pdTarget?.value || '107000') || 107000;
   const DAYS=getPD('daily',key,()=>getDefaultDays({y,m,days}));
   const tb=document.getElementById('dsTbody');
   const tf=document.getElementById('dsFoot');
@@ -156,8 +159,10 @@ function rebuildDaily(){
 function renderDailySales(){ rebuildDaily(); }
 
 function addDayRow(){
-  const dsM=document.getElementById('dsMonth'),dsY=document.getElementById('dsYear');
-  const m=dsM?parseInt(dsM.value):5, y=dsY?parseInt(dsY.value):2026;
+const dsM = document.getElementById('dsMonth') as HTMLInputElement;
+const dsY = document.getElementById('dsYear') as HTMLInputElement;
+const m = dsM ? parseInt(dsM.value) : 5;
+const y = dsY ? parseInt(dsY.value) : 2026;
   const days=new Date(y,m,0).getDate();
   const key=`${y}-${String(m).padStart(2,'0')}`;
   const DAYS=getPD('daily',key,()=>getDefaultDays({y,m,days}));
@@ -210,8 +215,8 @@ function startEditRow(key,idx){
 function saveRow(key,idx){
   const vals=[];
   for(let i=0;i<13;i++){
-    const el=document.getElementById(`ei_${idx}_${i}`);
-    vals.push(el?parseInt(el.value)||0:0);
+    const el = document.getElementById(`ei_${idx}_${i}`) as HTMLInputElement | null;
+vals.push(el ? parseInt(el.value) || 0 : 0);
   }
   if(!STORE.daily[key])return;
   const r=STORE.daily[key][idx];
@@ -233,16 +238,18 @@ function confirmSaveRow(){
 const DEV_THRESHOLD=5;
 function renderConsumption(){
   // Read from section's own month/year selectors
-  const cM=document.getElementById('consMonth');
-  const cY=document.getElementById('consYear');
+  const cM = document.getElementById('consMonth') as HTMLSelectElement | null;
+const cY = document.getElementById('consYear') as HTMLSelectElement | null;
   const m=cM?parseInt(cM.value):5;
   const y=cY?parseInt(cY.value):2026;
   const key=`${y}-${String(m).padStart(2,'0')}`;
   const label=MN[m-1]+' '+y;
 
   // Sync global bar
-  const gM=document.getElementById('gMonth'),gY=document.getElementById('gYear');
-  if(gM)gM.value=m; if(gY)gY.value=y;
+  const gM = document.getElementById('gMonth') as HTMLSelectElement | null;
+const gY = document.getElementById('gYear') as HTMLSelectElement | null;
+  if (gM) gM.value = String(m);
+if (gY) gY.value = String(y);
   const gLbl=document.getElementById('gPeriodLabel');
   if(gLbl)gLbl.textContent=label;
 
@@ -307,7 +314,8 @@ function renderConsumption(){
 
 
 function addConsItem(){
-  const cM=document.getElementById('consMonth'),cY=document.getElementById('consYear');
+  const cM = document.getElementById('consMonth') as HTMLSelectElement | null;
+const cY = document.getElementById('consYear') as HTMLSelectElement | null;
   const m=cM?parseInt(cM.value):5,y=cY?parseInt(cY.value):2026;
   const k=`${y}-${String(m).padStart(2,'0')}`;
   getPD('cons',k,[]);
@@ -440,7 +448,7 @@ function buildSalesReport(){
   const panel=document.getElementById('salesPanel');
   if(!panel)return;
   // Year from global selector
-  const gY=document.getElementById('gYear');
+  const gY = document.getElementById('gYear') as HTMLSelectElement | null;
   const yr=gY?parseInt(gY.value):2026;
   const SNAMES=['RC Express','Food Truck','Café','TCS','Events'];
 
@@ -547,8 +555,11 @@ const MI_DERIVED={
   '2026-03':{s:3111071,p:1085751,fc:1151556},'2026-04':{s:3107303,p:1193185,fc:1131610},
 };
 function renderMonthlyInput(){
-  const _mm=document.getElementById('miMonth'),_my=document.getElementById('miYear');
-  const _m=_mm?parseInt(_mm.value):5,_y=_my?parseInt(_my.value):2026;
+  const _mm = document.getElementById('miMonth') as HTMLSelectElement | null;
+const _my = document.getElementById('miYear') as HTMLSelectElement | null;
+
+const _m = _mm ? parseInt(_mm.value) : 5;
+const _y = _my ? parseInt(_my.value) : 2026;
   const p={m:_m,y:_y,days:new Date(_y,_m,0).getDate(),key:`${_y}-${String(_m).padStart(2,'0')}`,label:MN[_m-1]+' '+_y,short:MN_SHORT[_m-1]+' '+_y};
   const tb=document.getElementById('miBody'),tf=document.getElementById('miFoot');
   if(!tb)return;
@@ -606,8 +617,9 @@ function buildYearlySummary(){
   const tY=document.getElementById('yrBody');if(!tY)return;tY.innerHTML='';
   let ys=0,yp=0,yf=0,yn=0;
   MD_YEARLY.forEach(d=>{ys+=d.s;yp+=d.pu;yf+=d.fc;yn+=d.np;
-    const fc=(d.fc/d.s*100).toFixed(1),np=(d.np/d.s*100).toFixed(1);
-    tY.innerHTML+=`<tr><td class="l"><b>${d.m}</b></td><td>${fr(d.s)}</td><td>${fr(d.pu)}</td><td>${fr(d.fc)}</td><td><span class="tag ${fc>37?'r':'g'}">${fc}%</span></td><td>${fr(d.np)}</td><td><span class="tag g">${np}%</span></td></tr>`;
+    const fc = d.fc / d.s * 100;
+const np = d.np / d.s * 100;
+    tY.innerHTML+=`<tr><td class="l"><b>${d.m}</b></td><td>${fr(d.s)}</td><td>${fr(d.pu)}</td><td>${fr(d.fc)}</td><td><span class="tag ${fc>37?'r':'g'}">${fc.toFixed(1)}%</span></td><td>${fr(d.np)}</td><td><span class="tag g">${np.toFixed(1)}%</span></td></tr>`;
   });
   tY.innerHTML+=`<tr class="tot-row"><td class="l"><b>YTD</b></td><td>${fr(ys)}</td><td>${fr(yp)}</td><td>${fr(yf)}</td><td>${(yf/ys*100).toFixed(1)}%</td><td>${fr(yn)}</td><td>${(yn/ys*100).toFixed(1)}%</td></tr>`;
 }
@@ -624,7 +636,8 @@ function renderTarget(){
   const sites=getPD('target',key,TARGET_SITES.map(()=>({t:0,w:p.days})));
   const tb=document.getElementById('tgtBody'),tf=document.getElementById('tgtFoot');
   if(!tb)return;
-  const mSel=document.getElementById('tgtMonth');if(mSel)mSel.value=key;
+  const mSel = document.getElementById('tgtMonth') as HTMLSelectElement | null;
+if (mSel) mSel.value = key;
   const asOf=document.getElementById('tgtAsOf');
   const daysEntered=(STORE.daily[key]||[]).filter(r=>calcRow(r).grand>0).length;
   tb.innerHTML='';let totTgt=0,totAch=0;
@@ -678,9 +691,18 @@ function saveTarget(){flash('💾 Target saved!');}
 const INC_SECTIONS=['Kitchen','Counter','Delivery','Manager','Accounts','Truck','Express','TCS'];
 function renderIncentive(){
   const p=getGPeriod();const key=p.key;
-  const pool=parseFloat(document.getElementById('incPool').value)||0;
-  const daysInMonth=parseInt(document.getElementById('incDays').value)||p.days;
-  const incDate=document.getElementById('incDate').value||`${p.y}-${String(p.m).padStart(2,'0')}-${String(p.days).padStart(2,'0')}`;
+  const incPool = document.getElementById('incPool') as HTMLInputElement | null;
+const incDays = document.getElementById('incDays') as HTMLInputElement | null;
+const incDateEl = document.getElementById('incDate') as HTMLInputElement | null;
+
+const pool = parseFloat(incPool?.value || '0') || 0;
+
+const daysInMonth =
+  parseInt(incDays?.value || String(p.days)) || p.days;
+
+const incDate =
+  incDateEl?.value ||
+  `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.days).padStart(2, '0')}`;
   const ym=incDate.slice(0,7);
   const EMPS=getPD('incentive',key,[]);
   const tb=document.getElementById('incTbody'),tf=document.getElementById('incFoot');
@@ -733,15 +755,41 @@ function addEmployee(){
 }
 function copyEmployees(){const p=getGPeriod();const emps=getPD('incentive',p.key,[]);const txt=emps.map(e=>`${e.name}\t${e.code}\t${e.section}\t${e.pct}%`).join('\n');navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert('Copy failed'));}
 function reopenSheet(){if(!confirm('Re-open sheet?'))return;flash('🔓 Sheet unlocked','#fff3e0','#8B3300');}
-function downloadExcel(){
-  const p=getGPeriod();const key=p.key;
-  const pool=parseFloat(document.getElementById('incPool').value)||0;
-  const daysInMonth=parseInt(document.getElementById('incDays').value)||p.days;
-  const incDate=document.getElementById('incDate').value;
-  const ym=incDate.slice(0,7);
-  const EMPS=getPD('incentive',key,[]);
-  const rows=[['Name','Emp Code','Incentive (₹)','Year-Month','Incentive Date','Section','%','Calculated (₹)','Per Day (₹)','Leave Days','Present Days','Actual Incentive (₹)']];
-  let total=0;
+function downloadExcel() {
+  const p = getGPeriod();
+  const key = p.key;
+
+  const incPool = document.getElementById('incPool') as HTMLInputElement | null;
+  const incDays = document.getElementById('incDays') as HTMLInputElement | null;
+  const incDateEl = document.getElementById('incDate') as HTMLInputElement | null;
+
+  const pool = parseFloat(incPool?.value || '0') || 0;
+
+  const daysInMonth =
+    parseInt(incDays?.value || String(p.days)) || p.days;
+
+  const incDate = incDateEl?.value || '';
+
+  const ym = incDate.slice(0, 7);
+
+  const EMPS = getPD('incentive', key, []);
+
+  const rows = [[
+    'Name',
+    'Emp Code',
+    'Incentive (₹)',
+    'Year-Month',
+    'Incentive Date',
+    'Section',
+    '%',
+    'Calculated (₹)',
+    'Per Day (₹)',
+    'Leave Days',
+    'Present Days',
+    'Actual Incentive (₹)'
+  ]];
+
+  let total = 0;
   EMPS.forEach(emp=>{
     const calc=pool*emp.pct/100;const perDay=daysInMonth>0?calc/daysInMonth:0;const present=daysInMonth-emp.leave;const proRated=perDay*present;
     let fi=emp.absent?0:emp.fixInc!==''&&!isNaN(emp.fixInc)?parseFloat(emp.fixInc):emp.mgrOverride!==''&&!isNaN(emp.mgrOverride)?parseFloat(emp.mgrOverride):emp.actualInc!==''&&!isNaN(emp.actualInc)?parseFloat(emp.actualInc):proRated;
@@ -754,8 +802,13 @@ function downloadExcel(){
 }
 function sendWhatsApp(){
   const p=getGPeriod();const key=p.key;
-  const pool=parseFloat(document.getElementById('incPool').value)||0;
-  const daysInMonth=parseInt(document.getElementById('incDays').value)||p.days;
+  const incPool = document.getElementById('incPool') as HTMLInputElement | null;
+const incDays = document.getElementById('incDays') as HTMLInputElement | null;
+
+const pool = parseFloat(incPool?.value || '0') || 0;
+
+const daysInMonth =
+  parseInt(incDays?.value || String(p.days)) || p.days;
   const EMPS=getPD('incentive',key,[]);
   let msg=`*RC Employee Incentive — ${p.label}*\nPool: ₹${f(pool)} | Days: ${daysInMonth}\n\n`;
   EMPS.forEach(emp=>{
@@ -796,7 +849,10 @@ function buildCharts(){
   set('d-tcs',(lastD.tcsT||0)+(lastD.tcsu||0)+(lastD.tcsc||0)?'₹'+f((lastD.tcsT||0)+(lastD.tcsu||0)+(lastD.tcsc||0)):'₹0');
   set('d-rcf',lastD.rcfT?'₹'+f(lastD.rcfT):'₹0');
   const lastTotal=lastD.grand||0;
-  const tgt=parseInt((document.getElementById('pdTarget')||{value:'107000'}).value)||107000;
+  const pdTarget = document.getElementById('pdTarget') as HTMLInputElement | null;
+
+const tgt =
+  parseInt(pdTarget?.value || '107000') || 107000;
   set('d-lastTotal',lastTotal?'₹'+f(lastTotal):'₹0');
   set('d-perDayTgt','₹'+f(tgt));
   set('d-tgtAch',lastTotal?(lastTotal/tgt*100).toFixed(1)+'% achieved':'0.0% achieved');
@@ -828,7 +884,10 @@ function buildCharts(){
 // ══════════════════════════
 function waText(){
   const p=getGPeriod();
-  const tgt=parseInt((document.getElementById('pdTarget')||{value:107000}).value)||107000;
+  const pdTarget = document.getElementById('pdTarget') as HTMLInputElement | null;
+
+const tgt =
+  parseInt(pdTarget?.value || '107000') || 107000;
 
   // ── Yesterday's data: current date - 1 ──
   const yesterday=new Date();
@@ -1003,12 +1062,15 @@ function initPeriodSelectors(){
   const curY = 2026, curM = 5;
 
   // Populate gYear if needed
-  const gY = document.getElementById('gYear');
-  if(gY && !gY.value) gY.value = curY;
+  const gY = document.getElementById('gYear') as HTMLSelectElement | null;
+
+if (gY && !gY.value) {
+  gY.value = String(curY);
+}
 
   // Populate gMonth
-  const gM = document.getElementById('gMonth');
-  if(gM) gM.value = curM;
+  const gM = document.getElementById('gMonth') as HTMLSelectElement | null;
+  if (gM) gM.value = String(curM);
 
   // Populate all section month selectors with same options
   const monthSels = ['dsMonth','consMonth','incMonth','salesMonth','invMonth','purMonth','fcPMonth','miMonth'];
@@ -1020,7 +1082,7 @@ function initPeriodSelectors(){
     el.innerHTML = '';
     MN.forEach((name,i)=>{
       const opt = document.createElement('option');
-      opt.value = i+1;
+      opt.value = String(i + 1);
       opt.textContent = name;
       if(i+1 === curM) opt.selected = true;
       el.appendChild(opt);
@@ -1033,8 +1095,8 @@ function initPeriodSelectors(){
     el.innerHTML = '';
     [2025,2026,2027].forEach(y=>{
       const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
+      opt.value = String(y);
+opt.textContent = String(y);
       if(y === curY) opt.selected = true;
       el.appendChild(opt);
     });
@@ -1046,7 +1108,9 @@ function initPeriodSelectors(){
 }
 
 // renderDailySales = rebuildDaily (section uses its own month/year selectors)
-function renderDailySales(){ rebuildDaily(); }
+function renderDailySales2() {
+  rebuildDaily();
+}
 
 // Sync global selectors → section selectors
 function syncSectionSelectors(p){
@@ -1054,113 +1118,317 @@ function syncSectionSelectors(p){
   const yearSels  = ['dsYear','consYear','incYear','salesYear','invYear','purYear','fcPYear','miYear'];
   const allMonthSels=['dsMonth','consMonth','incMonth','salesMonth','invMonth','purMonth','fcPMonth','miMonth'];
   const allYearSels=['dsYear','consYear','incYear','salesYear','invYear','purYear','fcPYear','miYear'];
-  allMonthSels.forEach(id=>{const el=document.getElementById(id);if(el)el.value=p.m;});
-  allYearSels.forEach(id=>{const el=document.getElementById(id);if(el)el.value=p.y;});
+ allMonthSels.forEach(id => {
+  const el = document.getElementById(id) as HTMLSelectElement | null;
+
+  if (el) {
+    el.value = String(p.m);
+  }
+});
+
+allYearSels.forEach(id => {
+  const el = document.getElementById(id) as HTMLSelectElement | null;
+
+  if (el) {
+    el.value = String(p.y);
+  }
+});
   // Update period labels
-  ['dsPeriodLbl','consPeriodLbl','incPeriodLbl','salesPeriodLbl','invPeriodLbl','purPeriodLbl','fcPPeriodLbl','miPeriodLbl'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=p.label;});
-  // Also sync target month selector
-  const tgtM = document.getElementById('tgtMonth');
-  if(tgtM){
-    for(let o of tgtM.options){
-      if(o.value===p.key){tgtM.value=p.key;break;}
+[
+  'dsPeriodLbl',
+  'consPeriodLbl',
+  'incPeriodLbl',
+  'salesPeriodLbl',
+  'invPeriodLbl',
+  'purPeriodLbl',
+  'fcPPeriodLbl',
+  'miPeriodLbl'
+].forEach(id => {
+
+  const el = document.getElementById(id);
+
+  if (el) {
+    el.textContent = p.label;
+  }
+});
+
+
+// Also sync target month selector
+const tgtM =
+  document.getElementById('tgtMonth') as HTMLSelectElement | null;
+
+if (tgtM) {
+
+  for (const o of Array.from(tgtM.options)) {
+
+    if (o.value === p.key) {
+
+      tgtM.value = p.key;
+      break;
     }
   }
-  // Sync incentive date
-  const incDate = document.getElementById('incDate');
-  if(incDate) incDate.value = `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.days).padStart(2,'0')}`;
-  // Sync incentive days
-  const incDays = document.getElementById('incDays');
-  if(incDays) incDays.value = p.days;
+}
+
+
+// Sync incentive date
+const incDate =
+  document.getElementById('incDate') as HTMLInputElement | null;
+
+if (incDate) {
+
+  incDate.value =
+    `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.days).padStart(2, '0')}`;
+}
+
+
+// Sync incentive days
+const incDays =
+  document.getElementById('incDays') as HTMLInputElement | null;
+
+if (incDays) {
+
+  incDays.value = String(p.days);
+}
 }
 
 
 // ── Section-level period getters ──
-function getSectionPeriod(mId, yId){
-  const m = parseInt((document.getElementById(mId)||{value:'5'}).value)||5;
-  const y = parseInt((document.getElementById(yId)||{value:'2026'}).value)||2026;
-  const days = new Date(y,m,0).getDate();
-  const key = `${y}-${String(m).padStart(2,'0')}`;
-  return {m,y,days,key,label:MN[m-1]+' '+y,short:MN_SHORT[m-1]+' '+y};
+
+function getSectionPeriod(mId: string, yId: string) {
+
+  const mEl =
+    document.getElementById(mId) as HTMLSelectElement | null;
+
+  const yEl =
+    document.getElementById(yId) as HTMLSelectElement | null;
+
+  const m =
+    parseInt(mEl?.value || '5') || 5;
+
+  const y =
+    parseInt(yEl?.value || '2026') || 2026;
+
+  const days = new Date(y, m, 0).getDate();
+
+  const key =
+    `${y}-${String(m).padStart(2, '0')}`;
+
+  return {
+    m,
+    y,
+    days,
+    key,
+    label: MN[m - 1] + ' ' + y,
+    short: MN_SHORT[m - 1] + ' ' + y
+  };
 }
-function getSalesPeriod(){ return getSectionPeriod('salesMonth','salesYear'); }
-function getInvPeriod(){   return getSectionPeriod('invMonth','invYear'); }
-function getPurPeriod(){   return getSectionPeriod('purMonth','purYear'); }
-function getFCPeriod(){    return getSectionPeriod('fcPMonth','fcPYear'); }
-function getMIPeriod(){    return getSectionPeriod('miMonth','miYear'); }
+
+function getSalesPeriod() {
+  return getSectionPeriod('salesMonth', 'salesYear');
+}
+
+function getInvPeriod() {
+  return getSectionPeriod('invMonth', 'invYear');
+}
+
+function getPurPeriod() {
+  return getSectionPeriod('purMonth', 'purYear');
+}
+
+function getFCPeriod() {
+  return getSectionPeriod('fcPMonth', 'fcPYear');
+}
+
+function getMIPeriod() {
+  return getSectionPeriod('miMonth', 'miYear');
+}
 
 
-function closeModal(id){
-  const el=document.getElementById(id);
-  if(el)el.classList.remove('show');
+function closeModal(id: string) {
+
+  const el = document.getElementById(id);
+
+  if (el) {
+    el.classList.remove('show');
+  }
 }
+
 
 // Close modal on overlay click
-document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('.modal-overlay').forEach(m=>{
-    m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});
+document.addEventListener('DOMContentLoaded', () => {
+
+  document.querySelectorAll('.modal-overlay').forEach(m => {
+
+    m.addEventListener('click', e => {
+
+      if (e.target === m) {
+
+        (m as HTMLElement).classList.remove('show');
+      }
+    });
   });
 });
 
 
-function liveUpdate(key, idx, fieldIdx, val){
-  const DAYS=getPD('daily',key,()=>[]);
-  if(!DAYS[idx])return;
-  DAYS[idx][2+fieldIdx]=parseInt(val)||0;
-  // Recalc the totals in that row without full rebuild
-  const d=calcRow(DAYS[idx]);
-  const tgt=parseInt((document.getElementById('pdTarget')||{value:107000}).value)||107000;
-  const tr=document.getElementById('dsrow-'+idx);
-  if(!tr)return;
-  // Update total cells (positions in the row)
-  const cells=tr.querySelectorAll('td');
-  // cafeT at index 5, expT at 8, truckT at 11, tcsT at 14, grand at 19, avg at 20
-  const setCell=(i,html)=>{if(cells[i])cells[i].innerHTML=html;};
-  const zt=v=>v===0?'<span style="color:#1a4fd6;opacity:.4">0</span>':`<b style="color:#1a4fd6">${f(v)}</b>`;
-  setCell(5,zt(d.cafeT));
-  setCell(8,zt(d.expT));
-  setCell(11,zt(d.truckT));
-  setCell(14,zt(d.tcsT));
-  const isZero=d.grand===0;
-  const met=!isZero&&d.grand>=tgt;
-  const delta=d.grand-tgt;
-  const gc=met?'color:#166534;font-weight:700':'color:#b91c1c;font-weight:700';
-  setCell(19,isZero?'<span style="color:#bbb">₹0</span>':'₹'+f(d.grand));
-  setCell(20,isZero?'<span style="color:#bbb">—</span>':'₹'+f(d.grand));
-  setCell(21,'₹'+f(tgt));
-  setCell(22,`<span style="${isZero?'color:#bbb':gc}">${isZero?'—':(d.grand/tgt*100).toFixed(1)+'%'}</span>`);
-  setCell(23,`<span style="${isZero?'color:#bbb':gc}">${isZero?'—':(delta>=0?'+':'')+f(delta)}</span>`);
-  setCell(24,`<span style="${isZero?'color:#bbb':gc}">${isZero?'—':(delta>=0?'+':'-')+(Math.abs(delta/tgt)*100).toFixed(1)+'%'}</span>`);
-  const statusHtml=isZero?'<span style="color:#bbb;font-size:11px">—</span>':met?'<span class="tag g" style="font-size:11px">✅ Met</span>':'<span class="tag r" style="font-size:11px">✕ Miss</span>';
-  setCell(25,statusHtml);
+function liveUpdate(
+  key: string,
+  idx: number,
+  fieldIdx: number,
+  val: string
+) {
+
+  const DAYS = getPD('daily', key, () => []);
+
+  if (!DAYS[idx]) return;
+
+  DAYS[idx][2 + fieldIdx] =
+    parseInt(val) || 0;
+
+  // Recalc totals
+  const d = calcRow(DAYS[idx]);
+
+  const pdTarget =
+    document.getElementById('pdTarget') as HTMLInputElement | null;
+
+  const tgt =
+    parseInt(pdTarget?.value || '107000') || 107000;
+
+  const tr =
+    document.getElementById('dsrow-' + idx);
+
+  if (!tr) return;
+
+  const cells = tr.querySelectorAll('td');
+
+  const setCell = (i: number, html: string) => {
+
+    if (cells[i]) {
+      cells[i].innerHTML = html;
+    }
+  };
+
+  const zt = (v: number) =>
+
+    v === 0
+      ? '<span style="color:#1a4fd6;opacity:.4">0</span>'
+      : `<b style="color:#1a4fd6">${f(v)}</b>`;
+
+
+  setCell(5, zt(d.cafeT));
+  setCell(8, zt(d.expT));
+  setCell(11, zt(d.truckT));
+  setCell(14, zt(d.tcsT));
+
+  const isZero = d.grand === 0;
+
+  const met =
+    !isZero && d.grand >= tgt;
+
+  const delta =
+    d.grand - tgt;
+
+  const gc =
+    met
+      ? 'color:#166534;font-weight:700'
+      : 'color:#b91c1c;font-weight:700';
+
+
+  setCell(
+    19,
+    isZero
+      ? '<span style="color:#bbb">₹0</span>'
+      : '₹' + f(d.grand)
+  );
+
+  setCell(
+    20,
+    isZero
+      ? '<span style="color:#bbb">—</span>'
+      : '₹' + f(d.grand)
+  );
+
+  setCell(21, '₹' + f(tgt));
+
+  setCell(
+    22,
+    `<span style="${isZero ? 'color:#bbb' : gc}">
+      ${isZero ? '—' : (d.grand / tgt * 100).toFixed(1) + '%'}
+    </span>`
+  );
+
+  setCell(
+    23,
+    `<span style="${isZero ? 'color:#bbb' : gc}">
+      ${isZero ? '—' : (delta >= 0 ? '+' : '') + f(delta)}
+    </span>`
+  );
+
+  setCell(
+    24,
+    `<span style="${isZero ? 'color:#bbb' : gc}">
+      ${
+        isZero
+          ? '—'
+          : (delta >= 0 ? '+' : '-') +
+            (Math.abs(delta / tgt) * 100).toFixed(1) +
+            '%'
+      }
+    </span>`
+  );
+
+  const statusHtml =
+    isZero
+      ? '<span style="color:#bbb;font-size:11px">—</span>'
+      : met
+        ? '<span class="tag g" style="font-size:11px">✅ Met</span>'
+        : '<span class="tag r" style="font-size:11px">✕ Miss</span>';
+
+  setCell(25, statusHtml);
 }
 
-function saveInlineRow(key,idx){
-  const DAYS=getPD('daily',key,()=>[]);
-  if(!DAYS[idx])return;
-  // Values already saved via liveUpdate - just rebuild to show read-only
-  const d=calcRow(DAYS[idx]);
-  if(d.grand>0){
+
+function saveInlineRow(key: string, idx: number) {
+
+  const DAYS = getPD('daily', key, () => []);
+
+  if (!DAYS[idx]) return;
+
+  const d = calcRow(DAYS[idx]);
+
+  if (d.grand > 0) {
+
     rebuildDaily();
-    flash('✅ Day saved — ₹'+f(d.grand));
+
+    flash('✅ Day saved — ₹' + f(d.grand));
   }
 }
+
 
 // ══════════════════════════
 // INIT
 // ══════════════════════════
+
 initPeriodSelectors();
-onGlobalChange();
+
 rebuildDaily();
+
 buildSalesReport();
+
 buildInventory();
+
 buildPurchase();
+
 buildFoodCost();
+
 renderMonthlyInput();
+
 renderConsumption();
+
 buildYearlySummary();
-setTimeout(renderTarget,100);
-setTimeout(renderIncentive,150);
 
+setTimeout(renderTarget, 100);
 
+setTimeout(renderIncentive, 150);
 
 export {};
+
