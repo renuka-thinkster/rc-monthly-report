@@ -987,104 +987,143 @@ const tgt =
   }
 
   // ── YTD ──
-  msg+=`📦 YTD Summary (2026)\n`;
-  msg+=divider+'\n';
-  msg+=line('Sales','₹'+f(ytdS),'')+'\n';
-  msg+=line('Food Cost','₹'+f(ytdFC),(ytdS?(ytdFC/ytdS*100).toFixed(1)+'%':''))+'\n';
-  msg+=line('Net Profit','₹'+f(ytdNP),(ytdS?(ytdNP/ytdS*100).toFixed(1)+'%':''))+'\n';
-  msg+='`\`\`\n';
-  // ── Link to daily sales ──
-  // WhatsApp only hyperlinks a URL that is:
-  // 1. On its own line
-  // 2. Starts with https://
-  // 3. Has NO surrounding text on same line
-  const hostedBase=getHostedURL().split('#')[0];
-  const pageUrl=hostedBase+'#pg-dailysales';
-  const isLocal=pageUrl.startsWith('file://') || pageUrl.startsWith('blob:');
-  msg+=`\n`;
-  msg+=`📊 *View Full Daily Sales Report*\n`;
-  if(isLocal){
-    msg+=`\n⚠️ Set a hosted URL for clickable links\n`;
-    msg+=`_(Tap 🔗 Set URL button in the app)_\n`;
-  } else {
-    // URL must be alone on its own line — no prefix, no suffix
-    msg+=`\n`;
-    msg+=pageUrl;
-    msg+=`\n`;
-  }
-  msg+=`\n\n_Sent from RC MIS · ${new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}_`;
+msg += `📦 YTD Summary (2026)\n`;
+msg += divider + '\n';
+msg += line('Sales', '₹' + f(ytdS), '') + '\n';
+msg += line('Food Cost', '₹' + f(ytdFC), (ytdS ? (ytdFC / ytdS * 100).toFixed(1) + '%' : '')) + '\n';
+msg += line('Net Profit', '₹' + f(ytdNP), (ytdS ? (ytdNP / ytdS * 100).toFixed(1) + '%' : '')) + '\n';
+msg += '```\\n';
 
-  window.open('https://wa.me/?text='+encodeURIComponent(msg));
-}
-function getHostedURL(){
-  return localStorage.getItem('rcHostedURL') || window.location.href;
+// ── Link to daily sales ──
+const hostedBase = getHostedURL().split('#')[0];
+const pageUrl = hostedBase + '#pg-dailysales';
+
+msg += `\n`;
+msg += `📊 *View Full Daily Sales Report*\n`;
+msg += `\n`;
+msg += pageUrl;
+msg += `\n`;
+
+msg += `\n\n_Sent from RC MIS · ${new Date().toLocaleString('en-IN', {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+})}_`;
+
+window.open('https://wa.me/?text=' + encodeURIComponent(msg));
 }
 
-function setHostedURL(){
-  const current = localStorage.getItem('rcHostedURL') || '';
-  const url = prompt(
-    '🔗 Enter your hosted URL for WhatsApp links\n\n' +
-    'Example: https://rc-mis.vercel.app\n' +
-    'Or leave blank to use current page URL\n\n' +
-    'Current: ' + (current || 'not set'),
-    current
-  );
-  if(url === null) return; // cancelled
-  if(url.trim()) {
-    localStorage.setItem('rcHostedURL', url.trim());
-    flash('✅ URL saved: ' + url.trim(), '#dcfce7', '#166534');
-  } else {
-    localStorage.removeItem('rcHostedURL');
-    flash('🔗 URL cleared — using page URL', '#fff3e0', '#8B3300');
-  }
+// ──────────────────────────
+// LIVE HOSTED URL
+// ──────────────────────────
+function getHostedURL() {
+  return window.location.origin;
 }
 
-function waLink(){
+// ──────────────────────────
+// WHATSAPP DIRECT LINK
+// ──────────────────────────
+function waLink() {
+
   const base = getHostedURL().split('#')[0];
   const url = base + '#pg-dailysales';
-  // URL must be on its own line for WhatsApp to hyperlink it
-  const waMsg = '*RC MIS — Daily Sales*\n' +
+
+  const waMsg =
+    '*RC MIS — Daily Sales*\n' +
     '📊 View full report here:\n' +
     '\n' +
     url +
     '\n';
-  window.open('https://wa.me/?text=' + encodeURIComponent(waMsg));
-}
-function exportJSON(){const blob=new Blob([JSON.stringify({store:STORE},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='RC_MIS_Full.json';a.click();}
 
+  window.open(
+    'https://wa.me/?text=' + encodeURIComponent(waMsg)
+  );
+}
+
+// ──────────────────────────
+// EXPORT JSON
+// ──────────────────────────
+function exportJSON() {
+
+  const blob = new Blob(
+    [JSON.stringify({ store: STORE }, null, 2)],
+    { type: 'application/json' }
+  );
+
+  const a = document.createElement('a');
+
+  a.href = URL.createObjectURL(blob);
+
+  a.download = 'RC_MIS_Full.json';
+
+  a.click();
+}
 
 // ══════════════════════════
 // PERIOD SELECTOR INIT
 // ══════════════════════════
-function initPeriodSelectors(){
-  const now = new Date();
-  // Use actual current date: May 2026
-  const curY = 2026, curM = 5;
+function initPeriodSelectors() {
 
-  // Populate gYear if needed
+  const now = new Date();
+
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+
   const gY = document.getElementById('gYear') as HTMLSelectElement | null;
 
 if (gY && !gY.value) {
   gY.value = String(curY);
 }
 
-  // Populate gMonth
-  const gM = document.getElementById('gMonth') as HTMLSelectElement | null;
-  if (gM) gM.value = String(curM);
+// Populate gMonth
+const gM = document.getElementById('gMonth') as HTMLSelectElement | null;
 
-  // Populate all section month selectors with same options
-  const monthSels = ['dsMonth','consMonth','incMonth','salesMonth','invMonth','purMonth','fcPMonth','miMonth'];
-  const yearSels  = ['dsYear','consYear','incYear','salesYear','invYear','purYear','fcPYear','miYear'];
+if (gM) {
+  gM.value = String(curM);
+}
 
-  monthSels.forEach(id=>{
+  // Populate all section month selectors
+  const monthSels = [
+    'dsMonth',
+    'consMonth',
+    'incMonth',
+    'salesMonth',
+    'invMonth',
+    'purMonth',
+    'fcPMonth',
+    'miMonth'
+  ];
+
+  const yearSels = [
+    'dsYear',
+    'consYear',
+    'incYear',
+    'salesYear',
+    'invYear',
+    'purYear',
+    'fcPYear',
+    'miYear'
+  ];
+
+  monthSels.forEach(id => {
+
     const el = document.getElementById(id);
-    if(!el) return;
+
+    if (!el) return;
+
     el.innerHTML = '';
-    MN.forEach((name,i)=>{
+
+    MN.forEach((name, i) => {
+
       const opt = document.createElement('option');
+
       opt.value = String(i + 1);
+
       opt.textContent = name;
-      if(i+1 === curM) opt.selected = true;
+
+      if (i + 1 === curM) {
+        opt.selected = true;
+      }
+
       el.appendChild(opt);
     });
   });
