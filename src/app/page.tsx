@@ -4,25 +4,29 @@ import { useEffect } from 'react'
 import Script from 'next/script'
 
 export default function Home() {
-  useEffect(() => {
-    // Init after DOM is ready
-    const init = () => {
-      if (typeof (window as any).initPeriodSelectors === 'function') {
-        (window as any).initPeriodSelectors()
-        ;(window as any).onGlobalChange()
-        ;(window as any).rebuildDaily()
-        ;(window as any).buildSalesReport()
-        ;(window as any).buildInventory()
-        ;(window as any).buildPurchase()
-        ;(window as any).buildFoodCost()
-        ;(window as any).renderMonthlyInput()
-        ;(window as any).renderConsumption()
-        ;(window as any).buildYearlySummary()
-        setTimeout(() => (window as any).renderTarget?.(), 100)
-        setTimeout(() => (window as any).renderIncentive?.(), 150)
+useEffect(() => {
+    const init = async () => {
+      const w = window as any
+      if (typeof w.initPeriodSelectors !== 'function') return
+
+      // Load saved data from the database FIRST
+      if (typeof w.loadFromServer === 'function') {
+        await w.loadFromServer()
       }
+
+      w.initPeriodSelectors()
+      w.onGlobalChange()
+      w.rebuildDaily()
+      w.buildSalesReport()
+      w.buildInventory()
+      w.buildPurchase()
+      w.buildFoodCost()
+      w.renderMonthlyInput()
+      w.renderConsumption()
+      w.buildYearlySummary()
+      setTimeout(() => w.renderTarget?.(), 100)
+      setTimeout(() => w.renderIncentive?.(), 150)
     }
-    // Wait for scripts to load
     const timer = setTimeout(init, 300)
     return () => clearTimeout(timer)
   }, [])
@@ -210,19 +214,12 @@ const bodyHTML = `
       <option value="7">July</option><option value="8">August</option><option value="9">September</option>
       <option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
     <select id="invYear" onchange="buildInventory()" style="padding:5px 9px;border:1px solid #d0a060;border-radius:5px;font-size:13px;font-weight:700;font-family:Inter,sans-serif">
-      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
+      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
     <span id="invPeriodLbl" style="font-size:12px;font-weight:700;color:#c44000;background:#ffe0c0;padding:3px 12px;border-radius:20px">May 2026</span>
+    <button class="btn btn-orange" onclick="saveAll()" style="margin-left:auto">💾 Save</button>
     
   </div>
   <div class="sec-info">Per site × per month: enter Starting and Closing Inventory value (₹). Total row is auto-summed.</div>
-  <div class="month-bar">
-    <span style="font-weight:600;color:#555">Month:</span>
-    <select id="invMonth" onchange="renderInventory()"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5" selected>May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
-    <select id="invYear" onchange="renderInventory()"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
-    <span id="invLockBadge" class="lock-badge locked">🔒 Locked</span>
-    <button class="btn btn-gray" onclick="toggleInvLock()" id="invLockBtn">✏️ Edit</button>
-    <button class="btn btn-orange" onclick="renderInventory()" style="margin-left:auto">💾 Save</button>
-  </div>
   <div class="panel" style="padding:0;overflow:hidden">
     <div class="tbl-wrap"><table><thead id="invHead"></thead><tbody id="invBody"></tbody><tfoot id="invFoot"></tfoot></table></div>
   </div>
@@ -239,19 +236,12 @@ const bodyHTML = `
       <option value="7">July</option><option value="8">August</option><option value="9">September</option>
       <option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
     <select id="purYear" onchange="buildPurchase()" style="padding:5px 9px;border:1px solid #d0a060;border-radius:5px;font-size:13px;font-weight:700;font-family:Inter,sans-serif">
-      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
+      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
     <span id="purPeriodLbl" style="font-size:12px;font-weight:700;color:#c44000;background:#ffe0c0;padding:3px 12px;border-radius:20px">May 2026</span>
+    <button class="btn btn-orange" onclick="saveAll()" style="margin-left:auto">💾 Save</button>
     
   </div>
   <div class="sec-info">Enter Total New Purchase value (₹) per month.</div>
-  <div class="month-bar">
-    <span style="font-weight:600;color:#555">Month:</span>
-    <select id="purMonth" onchange="renderPurchase()"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5" selected>May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
-    <select id="purYear" onchange="renderPurchase()"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
-    <span id="purLockBadge" class="lock-badge locked">🔒 Locked</span>
-    <button class="btn btn-gray" onclick="togglePurLock()" id="purLockBtn">✏️ Edit</button>
-    <button class="btn btn-orange" onclick="renderPurchase()" style="margin-left:auto">💾 Save</button>
-  </div>
   <div class="panel" style="padding:0;overflow:hidden">
     <div class="tbl-wrap"><table><thead id="purHead"></thead><tbody id="purBody"></tbody></table></div>
   </div>
@@ -269,16 +259,12 @@ const bodyHTML = `
       <option value="7">July</option><option value="8">August</option><option value="9">September</option>
       <option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
     <select id="fcPYear" onchange="buildFoodCost()" style="padding:5px 9px;border:1px solid #d0a060;border-radius:5px;font-size:13px;font-weight:700;font-family:Inter,sans-serif">
-      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
+      <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
     <span id="fcPPeriodLbl" style="font-size:12px;font-weight:700;color:#c44000;background:#ffe0c0;padding:3px 12px;border-radius:20px">May 2026</span>
     
   </div>
   <div class="note-box"><b>Actual Food Cost</b> = Starting Inventory + Total Value of New Purchase – Ending Inventory<br><b>% Food Cost</b> = Actual Food Cost × 100 / Sales (Turnover)</div>
   <div class="sec-info">All values are <b>auto-derived</b> from sheets ②③ and ① (no manual entry).</div>
-  <div class="month-bar">
-    <span style="font-weight:600;color:#555">View Year:</span>
-    <select id="fcYear" onchange="renderFoodCost()"></select>
-  </div>
   <div class="panel" style="padding:0;overflow:hidden">
     <div class="tbl-wrap"><table><thead id="fcHead"></thead><tbody id="fcBody"></tbody></table></div>
   </div>
@@ -296,7 +282,7 @@ const bodyHTML = `
     <input type="date" id="tgtAsOf" value="2026-05-17" onchange="renderTarget()" style="padding:5px 8px;border:1.5px solid #c44000;border-radius:5px;font-size:12px;font-family:Inter,sans-serif">
     <button class="btn btn-gray" onclick="copyTargetFromPrev()">📋 Copy from prev</button>
     <span class="lock-badge open">✏️ Editable</span>
-    <button class="btn btn-orange" onclick="flash('💾 Target saved!','#dcfce7','#166634')" style="margin-left:auto">💾 Save</button>
+    <button class="btn btn-orange" onclick="saveAll()" style="margin-left:auto">💾 Save</button>
   </div>
   <div class="panel" style="padding:0;overflow:hidden">
     <div class="tbl-wrap"><table><thead id="tgtHead"></thead><tbody id="tgtBody"></tbody><tfoot id="tgtFoot"></tfoot></table></div>
@@ -386,7 +372,7 @@ const bodyHTML = `
     <select id="consMonth" onchange="renderConsumption()"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5" selected>May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
     <select id="consYear" onchange="renderConsumption()"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select>
     <span class="lock-badge open">✏️ Editable</span>
-    <button class="btn btn-orange" onclick="flash('💾 Saved!','#dcfce7','#166634')">💾 Save</button>
+    <button class="btn btn-orange" onclick="saveAll()">💾 Save</button>
     <button class="btn btn-orange" onclick="addConsItem()" style="margin-left:auto">+ Add Item</button>
   </div>
   <div class="panel" style="padding:0;overflow:hidden">

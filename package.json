@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -19,6 +23,7 @@
   "devDependencies": {
     "@types/node": "20.12.12",
     "@types/react": "18.3.3",
+    "dotenv": "^16.4.5",
     "drizzle-kit": "^0.31.10",
     "typescript": "5.4.5"
   }

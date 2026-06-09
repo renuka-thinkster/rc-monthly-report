@@ -579,6 +579,9 @@ function buildFoodCost(){
   const head=document.getElementById('fcHead'),body=document.getElementById('fcBody');
   if(!head)return;
   const months12=[];for(let i=1;i<=12;i++)months12.push({key:`2026-${String(i).padStart(2,'0')}`,label:`${MN_SHORT[i-1]} 2026`});
+  const fcSales={
+    '2026-01':2766097,'2026-02':2598935,'2026-03':3111071,'2026-04':3107303,'2026-05':3603406
+  };
   let h1=`<tr style="background:#fff8f0"><th rowspan="2" style="padding:9px 12px;text-align:left;border-bottom:2px solid #d0cdc6;font-size:11px;font-weight:700;color:#555;min-width:60px"></th>`;
   months12.forEach(m=>{h1+=`<th colspan="2" style="padding:7px 10px;text-align:center;border-bottom:1px solid #d0cdc6;border-left:1px solid #e0ddd6;font-size:11px;font-weight:700;color:#c44000">${m.label}</th>`;});
   h1+=`<th rowspan="2" style="padding:9px 12px;text-align:right;border-bottom:2px solid #d0cdc6;border-left:2px solid #c44000;font-size:11px;font-weight:700;color:#1a73e8;min-width:80px">Annual<br>FC</th></tr>`;
@@ -594,7 +597,7 @@ function buildFoodCost(){
     const endInv=inv.reduce((s,r)=>s+r[1],0);
     const pur=STORE.purchase[m.key]||0;
     const fc=startInv+pur-endInv;
-    const sales=rcMonthFigures(m.key).s;
+    const sales=fcSales[m.key]||0;
     const pct=sales>0?(fc/sales*100).toFixed(2):null;
     if(fc>0)annualFC+=fc;
     const fcColor=fc>0?'#c44000':'#bbb';
@@ -715,7 +718,10 @@ function toggleSalesLock(mk){const d=getPD('sales',mk,{sub:0,locked:false,stores
 // MONTHLY INPUT
 // ══════════════════════════
 const MI_MONTHS_ALL=MN_SHORT.map((_,i)=>`${MN_SHORT[i]} 2026`);
-// MI_DERIVED removed — Monthly Input now derives s/p/fc live from STORE via rcMonthFigures().
+const MI_DERIVED={
+  '2026-01':{s:2766097,p:939559,fc:986052},'2026-02':{s:2598935,p:1004521,fc:947731},
+  '2026-03':{s:3111071,p:1085751,fc:1151556},'2026-04':{s:3107303,p:1193185,fc:1131610},
+};
 function renderMonthlyInput(){
   const _mm=document.getElementById('miMonth'),_my=document.getElementById('miYear');
   const _m=_mm?parseInt(_mm.value):5,_y=_my?parseInt(_my.value):2026;
@@ -726,7 +732,7 @@ function renderMonthlyInput(){
   let totS=0,totP=0,totFC=0,totSF=0,totD=0,totM=0,totOI=0,totNP=0;
   MN_SHORT.forEach((ms,i)=>{
     const mk=`2026-${String(i+1).padStart(2,'0')}`;
-    const _mf=rcMonthFigures(mk); const d={s:_mf.s,p:_mf.pu,fc:_mf.fc};
+    const d=MI_DERIVED[mk]||{s:0,p:0,fc:0};
     const man=getPD('manual',mk,[0,0,0,0]);
     const isActive=(i+1)===p.m;
     const locked=i+1<p.m;
@@ -764,50 +770,16 @@ function renderMonthlyInput(){
 // ══════════════════════════
 // YEARLY SUMMARY
 // ══════════════════════════
-// ── LIVE reporting helpers — derive monthly figures straight from STORE.
-//    (replaces the old hardcoded MD_YEARLY / fcSales / MI_DERIVED sample data)
-function rcMonthFigures(mk){
-  const sd = (STORE.sales && STORE.sales[mk]) || null;
-  // stores order: 0=RC Express, 1=Food Truck, 2=Café, 3=TCS, 4=Events/RCF
-  // store row: [dining_cnt, hd_cnt, dining_amt, hd_amt, credit_sales, foc]
-  const stTot = i => (sd && sd.stores && sd.stores[i])
-    ? ((+sd.stores[i][2]||0)+(+sd.stores[i][3]||0)+(+sd.stores[i][4]||0)+(+sd.stores[i][5]||0)) : 0;
-  const ex=stTot(0), tr=stTot(1), ca=stTot(2), tc=stTot(3), rf=stTot(4);
-  let s = ex+tr+ca+tc+rf;
-  if(!s && sd) s = +sd.sub || 0;
-
-  const inv = (STORE.inv && STORE.inv[mk]) || [[0,0],[0,0],[0,0],[0,0],[0,0]];
-  const op = inv.reduce((a,r)=>a+(+r[0]||0),0);
-  const cl = inv.reduce((a,r)=>a+(+r[1]||0),0);
-  const pu = (STORE.purchase && +STORE.purchase[mk]) || 0;
-  let fc = op + pu - cl; if(fc<0) fc = 0;
-
-  const man = (STORE.manual && STORE.manual[mk]) || [0,0,0,0];
-  const np = s - pu - fc - (+man[0]||0) - (+man[1]||0) - (+man[2]||0) + (+man[3]||0);
-
-  const tgtArr = (STORE.target && STORE.target[mk]) || [];
-  const tg = Array.isArray(tgtArr) ? tgtArr.reduce((a,x)=>a+((x&&+x.t)||0),0) : 0;
-
-  return {s, pu, fc, np, ca, tr, ex, tc, rf, op, cl, tg};
-}
-
-// Build the per-month array (same shape the charts/summary expect) for a year.
-function getMDYearly(year){
-  let Y = year;
-  if(!Y){ const el=document.getElementById('gYear'); Y = el?parseInt(el.value):2026; }
-  if(!Y) Y = 2026;
-  const all=[];
-  for(let i=1;i<=12;i++){
-    const mk = `${Y}-${String(i).padStart(2,'0')}`;
-    all.push(Object.assign({m:MN_SHORT[i-1], key:mk}, rcMonthFigures(mk)));
-  }
-  const active = all.filter(d => d.s > 0);   // months with sales = the reporting timeline
-  return active.length ? active : all;
-}
+const MD_YEARLY=[
+  {m:'Jan',s:2180000,ca:980000,tr:420000,ex:310000,tc:380000,rf:90000,pu:780000,fc:770000,op:85000,cl:92000,np:420000,tg:3200000},
+  {m:'Feb',s:2340000,ca:1050000,tr:450000,ex:330000,tc:400000,rf:110000,pu:840000,fc:835000,op:92000,cl:88000,np:460000,tg:3200000},
+  {m:'Mar',s:2590000,ca:1160000,tr:500000,ex:360000,tc:450000,rf:120000,pu:950000,fc:940000,op:88000,cl:95000,np:510000,tg:3300000},
+  {m:'Apr',s:2870000,ca:1280000,tr:550000,ex:400000,tc:510000,rf:130000,pu:1060000,fc:1050000,op:95000,cl:102000,np:580000,tg:3300000},
+  {m:'May',s:3603406,ca:1620000,tr:690000,ex:480000,tc:680000,rf:133406,pu:1393016,fc:1371949,op:102000,cl:110000,np:721770,tg:3317000},
+];
 function renderYearly(){ buildYearlySummary(); }
 function buildYearlySummary(){
   const tY=document.getElementById('yrBody');if(!tY)return;tY.innerHTML='';
-  const MD_YEARLY = getMDYearly();
   let ys=0,yp=0,yf=0,yn=0;
   MD_YEARLY.forEach(d=>{ys+=d.s;yp+=d.pu;yf+=d.fc;yn+=d.np;
     const fc=(d.fc/d.s*100).toFixed(1),np=(d.np/d.s*100).toFixed(1);
@@ -974,7 +946,6 @@ function sendWhatsApp(){
 // CHARTS
 // ══════════════════════════
 function buildCharts(){
-  const MD_YEARLY = getMDYearly();
   // ── Update KPI cards ──
   const ytdS=MD_YEARLY.reduce((a,d)=>a+d.s,0);
   const ytdP=MD_YEARLY.reduce((a,d)=>a+d.pu,0);
@@ -1016,8 +987,8 @@ function buildCharts(){
     try{Chart.getChart(id)?.destroy();}catch(e){}
     new Chart(el,{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Inter',size:10},boxWidth:10,padding:6}}},...opts}});
   };
-  const dv=(STORE.daily[p.key]||[]).map(r=>calcRow(r).grand);
-  mk('cDay','bar',{labels:(STORE.daily[p.key]||[]).map(r=>r[0].slice(0,5)),datasets:[{label:'Sales',data:dv,backgroundColor:dv.map(v=>v>=tgt?'#25a244':v>0?'#c44000':'#e0ddd6'),borderRadius:3},{label:'Target',data:Array(dv.length).fill(tgt),type:'line',borderColor:'#8B4513',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false}]},{scales:{y:{ticks:{callback:v=>'₹'+(v/1000).toFixed(0)+'K',font:{size:10}}},x:{ticks:{font:{size:9}}}}});
+  const dv=(STORE.daily['2026-05']||[]).map(r=>calcRow(r).grand);
+  mk('cDay','bar',{labels:(STORE.daily['2026-05']||[]).map(r=>r[0].slice(0,5)),datasets:[{label:'Sales',data:dv,backgroundColor:dv.map(v=>v>=107000?'#25a244':v>0?'#c44000':'#e0ddd6'),borderRadius:3},{label:'Target',data:Array(dv.length).fill(107000),type:'line',borderColor:'#8B4513',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false}]},{scales:{y:{ticks:{callback:v=>'₹'+(v/1000).toFixed(0)+'K',font:{size:10}}},x:{ticks:{font:{size:9}}}}});
   mk('cMS','bar',{labels:labs,datasets:[{label:'Sales',data:MD_YEARLY.map(d=>d.s),backgroundColor:'#E8A020',borderRadius:4}]},{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>(v/100000).toFixed(0)+'L',font:{size:10}}}}});
   mk('cLine','line',{labels:labs,datasets:[{label:'Sales',data:MD_YEARLY.map(d=>d.s),borderColor:'#25a244',backgroundColor:'rgba(37,162,68,0.07)',fill:true,tension:0.4,pointRadius:3},{label:'Food Cost',data:MD_YEARLY.map(d=>d.fc),borderColor:'#c44000',tension:0.4,fill:false,pointRadius:3},{label:'Net Profit',data:MD_YEARLY.map(d=>d.np),borderColor:'#1a73e8',tension:0.4,fill:false,pointRadius:3}]},{scales:{y:{ticks:{callback:v=>(v/100000).toFixed(1)+'L',font:{size:10}}}}});
   const fcv=MD_YEARLY.map(d=>+(d.fc/d.s*100).toFixed(2));
@@ -1033,20 +1004,20 @@ function buildCharts(){
 // ══════════════════════════
 function waText(){
   const p = getGPeriod();
-  const cur = rcMonthFigures(p.key);            // live figures for the active month
-  const yr  = getMDYearly(p.y);                 // live YTD for the active year
+  const s = MD_YEARLY.find(d => d.m === p.short) || MD_YEARLY[MD_YEARLY.length - 1];
 
-  const ytdS  = yr.reduce((a, d) => a + d.s,  0);
-  const ytdFC = yr.reduce((a, d) => a + d.fc, 0);
-  const ytdNP = yr.reduce((a, d) => a + d.np, 0);
+  // Compute YTD live from the same data the dashboard uses
+  const ytdS  = MD_YEARLY.reduce((a, d) => a + d.s,  0);
+  const ytdFC = MD_YEARLY.reduce((a, d) => a + d.fc, 0);
+  const ytdNP = MD_YEARLY.reduce((a, d) => a + d.np, 0);
   const ytdFCpct = ytdS ? (ytdFC / ytdS * 100).toFixed(2) : '0';
   const ytdNPpct = ytdS ? (ytdNP / ytdS * 100).toFixed(2) : '0';
 
   const msg =
 `*RC MIS — ${p.label}*
-Sales: ₹${f(cur.s)}
-Food Cost: ₹${f(cur.fc)} (${cur.s ? (cur.fc / cur.s * 100).toFixed(1) : '0'}%)
-Net Profit: ₹${f(cur.np)} (${cur.s ? (cur.np / cur.s * 100).toFixed(1) : '0'}%)
+Sales: ₹${f(s.s)}
+Food Cost: ₹${f(s.fc)} (${s.s ? (s.fc / s.s * 100).toFixed(1) : '0'}%)
+Net Profit: ₹${f(s.np)} (${s.s ? (s.np / s.s * 100).toFixed(1) : '0'}%)
 
 YTD: ₹${f(ytdS)} | FC%: ${ytdFCpct}% | NP%: ${ytdNPpct}%`;
 
@@ -1228,131 +1199,85 @@ setTimeout(renderIncentive,150);
 // GET to load, PUT to save. Requires the user to be logged in.
 // ════════════════════════════════════════════════════════════════
 
-const LS_KEY = 'rc_mis_store';   // client-side cache key
+const LS_KEY = 'rc_mis_store'   // client-side cache key
 
 // Copy all keys from src into the live STORE object (don't reassign const).
 function hydrateStore(src) {
-  if (!src || typeof src !== 'object') return;
-  Object.keys(src).forEach(function (k) { STORE[k] = src[k]; });
-}
-
-// Count total day-rows across all months — used to detect an "empty" dataset.
-function _dailyRowCount(o) {
-  try {
-    var d = (o && o.daily) || {};
-    return Object.keys(d).reduce(function (n, k) {
-      return n + (Array.isArray(d[k]) ? d[k].length : 0);
-    }, 0);
-  } catch (e) { return 0; }
+  if (!src || typeof src !== 'object') return
+  Object.keys(src).forEach(k => { STORE[k] = src[k] })
 }
 
 // LOAD — called once on startup
 async function loadFromServer() {
   try {
-    const res = await fetch('/api/data?t=' + Date.now(), { cache: 'no-store' });
-    if (res.status === 401) { console.warn('Not logged in — cannot load shared data.'); return; }
-    if (!res.ok) { console.warn('Load HTTP ' + res.status + ' — keeping current data.'); return; }
-    const json = await res.json();
-    const d = json && json.data;
+    const res = await fetch('/api/data')
+    if (res.status === 401) {
+      console.warn('Not logged in — cannot load shared data.')
+      return
+    }
+    const json = await res.json()
+    const d = json.data
 
+    // Only accept data that matches THIS app's structure.
+    // The DB may contain old-format data ({years,...}) we must ignore.
     if (d && typeof d === 'object' && d.daily && d.sales) {
-      // SAFETY: never let an empty server blob wipe a populated dataset.
-      if (_dailyRowCount(d) === 0 && _dailyRowCount(STORE) > 0) {
-        console.warn('Server data is empty; keeping current data. Click Save to push it to the DB.');
-        return;
-      }
-      hydrateStore(d);
-      try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch (e) {}
+      hydrateStore(d)
+      try { localStorage.setItem(LS_KEY, JSON.stringify(d)) } catch (e) {}
     } else {
-      console.warn('DB has no valid app data yet — keeping defaults. Click Save to write them.');
+      console.warn('DB has no valid app data yet — keeping defaults. Click Save to write them.')
     }
   } catch (e) {
-    console.warn('Load from server failed, using defaults:', e);
+    console.warn('Load from server failed, using defaults:', e)
   }
 }
 
-// SAVE — persists the entire STORE to the database. Surfaces the REAL error.
+// SAVE — persists the entire STORE to the database
 async function saveAll() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(STORE)); } catch (e) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify(STORE)) } catch (e) {}
 
   try {
     const res = await fetch('/api/data', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: STORE }),
-      keepalive: true,
-    });
-
-    if (res.status === 401) { flash('⚠️ Please log in to save', '#fee2e2', '#991b1b'); return; }
-
-    // Read the body once; tolerate non-JSON error pages.
-    let bodyText = '';
-    try { bodyText = await res.text(); } catch (e) {}
-    let json = null;
-    try { json = bodyText ? JSON.parse(bodyText) : null; } catch (e) {}
-
-    if (res.ok && json && json.ok) { flash('💾 Saved to database!'); return; }
-
-    const detail = (json && (json.error || JSON.stringify(json))) || bodyText || ('HTTP ' + res.status);
-    console.error('Save failed → HTTP', res.status, detail);
-    flash('⚠️ Save failed (HTTP ' + res.status + '): ' + String(detail).slice(0, 100), '#fee2e2', '#991b1b');
+    })
+    if (res.status === 401) {
+      flash('⚠️ Please log in to save', '#fee2e2', '#991b1b')
+      return
+    }
+    const json = await res.json()
+    if (json.ok) {
+      flash('💾 Saved to database!')
+    } else {
+      flash('⚠️ Save failed: ' + (json.error || 'unknown'), '#fee2e2', '#991b1b')
+    }
   } catch (e) {
-    console.error('Save network error:', e);
-    flash('⚠️ Network error — saved locally only', '#fef3c7', '#92400e');
+    flash('⚠️ Network error — saved locally only', '#fef3c7', '#92400e')
   }
 }
 
-// Manual diagnostic — run rcSaveTest() in the browser console to see the raw response.
-async function rcSaveTest() {
-  try {
-    const res = await fetch('/api/data', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: STORE }),
-    });
-    const text = await res.text();
-    console.log('[rcSaveTest] status:', res.status, res.statusText);
-    console.log('[rcSaveTest] body:', text);
-    return { status: res.status, body: text };
-  } catch (e) {
-    console.error('[rcSaveTest] threw:', e);
-    return { error: String(e) };
-  }
-}
-
-// Debounced autosave. _savePending tracks whether an edit is waiting to be
-// written, so we can force a flush before the page unloads.
-let _saveTimer = null;
-let _savePending = false;
+// Optional debounced autosave
+let _saveTimer = null
 function autoSave() {
-  _savePending = true;
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(function () { _savePending = false; saveAll(); }, 800);
-}
-// Write immediately (used on page-hide so a quick refresh can't drop an edit).
-function flushSave() {
-  if (!_savePending) return;
-  _savePending = false;
-  clearTimeout(_saveTimer);
-  saveAll();
+  clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(saveAll, 1500)
 }
 
-window.saveAll = saveAll;
-window.loadFromServer = loadFromServer;
-window.autoSave = autoSave;
-window.flushSave = flushSave;
-window.rcSaveTest = rcSaveTest;
+window.saveAll = saveAll
+window.loadFromServer = loadFromServer
+window.autoSave = autoSave
 
 // ════════════════════════════════════════════════════════════════
-// AUTOSAVE WIRING — persist every edit. Leading ";" is ASI safety.
-// IMPORTANT: only 'change' and 'click' trigger saves, never 'input'.
-// A field's value lands in STORE on its onchange (blur/commit), so an
-// 'input'-driven save would persist STALE data typed but not committed.
+// AUTOSAVE WIRING — makes every edit actually persist to the DB.
+// Without this, only the top-bar "Save" writes; everything else
+// just mutates STORE in memory and is lost on a hard refresh.
 // ════════════════════════════════════════════════════════════════
-;(function () {
+(function () {
+  // Don't autosave until the initial server load has finished,
+  // otherwise the default STORE could overwrite real DB data.
   window.__rcReady = false;
   if (typeof window.loadFromServer === 'function') {
-    var _origLoad = window.loadFromServer;
+    const _origLoad = window.loadFromServer;
     window.loadFromServer = async function () {
       try { await _origLoad.apply(this, arguments); }
       finally { window.__rcReady = true; }
@@ -1361,23 +1286,15 @@ window.rcSaveTest = rcSaveTest;
     window.__rcReady = true;
   }
 
-  function trigger() {
-    if (!window.__rcReady || typeof window.autoSave !== 'function') return;
-    window.autoSave();
-  }
+  const trigger = () => { if (window.__rcReady && typeof autoSave === 'function') autoSave(); };
 
-  // 'change' fires AFTER the cell's onchange has written the value into STORE.
+  // Field edits: the inline onchange runs FIRST (mutating STORE), then this fires.
+  document.addEventListener('input', trigger, false);
   document.addEventListener('change', trigger, false);
-  document.addEventListener('click', function (e) {
-    if (e.target && e.target.closest &&
-        e.target.closest('button, .btn, .save-row-btn, .mbtn, .modal-btn')) trigger();
-  }, false);
 
-  // Safety net: if the user refreshes/closes/navigates with an edit still
-  // pending in the debounce window, push it now. keepalive lets it complete.
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') flushSave();
+  // Click-driven mutations (lock/unlock, add/remove item, save-row, etc.).
+  // Redundant saves are harmless: autoSave is debounced + DB is last-write-wins.
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('button, .btn, .save-row-btn, .mbtn, .modal-btn')) trigger();
   }, false);
-  window.addEventListener('pagehide', flushSave, false);
-  window.addEventListener('beforeunload', flushSave, false);
 })();
