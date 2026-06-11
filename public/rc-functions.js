@@ -974,6 +974,15 @@ function sendWhatsApp(){
 // CHARTS
 // ══════════════════════════
 function buildCharts(){
+  // Chart.js loads from a CDN and may not be ready the first time the dashboard
+  // renders. Wait for it (up to ~6s) instead of throwing "Chart is not defined".
+  if (typeof Chart === 'undefined') {
+    buildCharts._tries = (buildCharts._tries || 0) + 1;
+    if (buildCharts._tries <= 40) { setTimeout(buildCharts, 150); return; }
+    console.warn('Chart.js failed to load — skipping charts.');
+    return;
+  }
+  buildCharts._tries = 0;
   const MD_YEARLY = getMDYearly();
   // ── Update KPI cards ──
   const ytdS=MD_YEARLY.reduce((a,d)=>a+d.s,0);
@@ -1246,12 +1255,62 @@ function _dailyRowCount(o) {
   } catch (e) { return 0; }
 }
 
+// Persistent status banner — unlike flash(), this STAYS until the next save
+// result, so a rejected save can't disappear before you notice it.
+function rcSaveStatus(kind, html) {
+  var id = 'rcSaveBanner';
+  var el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.style = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;padding:9px 16px;' +
+               'font:600 13px Inter,system-ui,sans-serif;text-align:center;box-shadow:0 -2px 10px rgba(0,0,0,.12)';
+    document.body.appendChild(el);
+  }
+  if (kind === 'ok') {
+    el.style.background = '#dcfce7'; el.style.color = '#166534';
+    el.innerHTML = html;
+    clearTimeout(el._t); el._t = setTimeout(function () { el.remove(); }, 2200);
+  } else { // 'err'
+    el.style.background = '#991b1b'; el.style.color = '#fff';
+    el.innerHTML = html;
+    clearTimeout(el._t);
+  }
+}
+
+// Pull the last known-good data out of localStorage. This is what makes the
+// browser copy actually useful: if the DB has nothing yet (or is unreachable),
+// a reload restores your work instead of dropping back to seed defaults.
+function restoreLocalCache() {
+  try {
+    var raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    var d = JSON.parse(raw);
+    if (d && typeof d === 'object' && d.daily && _dailyRowCount(d) > 0) {
+      hydrateStore(d);
+      console.info('Restored data from local cache.');
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 // LOAD — called once on startup
 async function loadFromServer() {
   try {
     const res = await fetch('/api/data?t=' + Date.now(), { cache: 'no-store' });
-    if (res.status === 401) { console.warn('Not logged in — cannot load shared data.'); return; }
-    if (!res.ok) { console.warn('Load HTTP ' + res.status + ' — keeping current data.'); return; }
+    if (res.status === 401) {
+      console.warn('Not logged in — cannot load shared data.');
+      rcSaveStatus('err', '🔒 Not signed in — changes will NOT be saved. ' +
+        '<a href="/login" style="color:#fff;text-decoration:underline">Sign in</a>');
+      restoreLocalCache();
+      return;
+    }
+    if (!res.ok) {
+      console.warn('Load HTTP ' + res.status + ' — falling back to local cache.');
+      restoreLocalCache();
+      return;
+    }
     const json = await res.json();
     const d = json && json.data;
 
@@ -1264,10 +1323,15 @@ async function loadFromServer() {
       hydrateStore(d);
       try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch (e) {}
     } else {
-      console.warn('DB has no valid app data yet — keeping defaults. Click Save to write them.');
+      // DB has nothing valid yet — restore any local cache so a reload before
+      // the first successful save doesn't lose the user's work.
+      if (!restoreLocalCache()) {
+        console.warn('DB has no valid app data yet — keeping defaults. Click Save to write them.');
+      }
     }
   } catch (e) {
-    console.warn('Load from server failed, using defaults:', e);
+    console.warn('Load from server failed, trying local cache:', e);
+    restoreLocalCache();
   }
 }
 
@@ -1283,7 +1347,13 @@ async function saveAll() {
       keepalive: true,
     });
 
-    if (res.status === 401) { flash('⚠️ Please log in to save', '#fee2e2', '#991b1b'); return; }
+    if (res.status === 401) {
+      // The save was REJECTED because there's no valid session. This is the
+      // usual reason data "only stays in the browser". Make it impossible to miss.
+      rcSaveStatus('err', '🔒 Save rejected — you are not signed in. ' +
+        '<a href="/login" style="color:#fff;text-decoration:underline">Sign in to save</a>');
+      return;
+    }
 
     // Read the body once; tolerate non-JSON error pages.
     let bodyText = '';
@@ -1291,14 +1361,18 @@ async function saveAll() {
     let json = null;
     try { json = bodyText ? JSON.parse(bodyText) : null; } catch (e) {}
 
-    if (res.ok && json && json.ok) { flash('💾 Saved to database!'); return; }
+    if (res.ok && json && json.ok) {
+      rcSaveStatus('ok', '💾 Saved to database ✓ (v' + (json.version != null ? json.version : '?') + ')');
+      return;
+    }
 
     const detail = (json && (json.error || JSON.stringify(json))) || bodyText || ('HTTP ' + res.status);
     console.error('Save failed → HTTP', res.status, detail);
-    flash('⚠️ Save failed (HTTP ' + res.status + '): ' + String(detail).slice(0, 100), '#fee2e2', '#991b1b');
+    rcSaveStatus('err', '⚠️ Save failed (HTTP ' + res.status + '): ' +
+      String(detail).slice(0, 160).replace(/</g, '&lt;'));
   } catch (e) {
     console.error('Save network error:', e);
-    flash('⚠️ Network error — saved locally only', '#fef3c7', '#92400e');
+    rcSaveStatus('err', '⚠️ Network error — saved to this browser only, NOT the database.');
   }
 }
 

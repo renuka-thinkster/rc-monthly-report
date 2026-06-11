@@ -1,19 +1,67 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Script from 'next/script'
 
-export default function Home() {
-useEffect(() => {
-    const init = async () => {
-      const w = window as any
-      if (typeof w.initPeriodSelectors !== 'function') return
+type AuthState = 'checking' | 'authed' | 'noauth'
+type RCUser = { email: string; role: string }
 
-      // Load saved data from the database FIRST
+export default function Home() {
+  const [authState, setAuthState] = useState<AuthState>('checking')
+  const [user, setUser] = useState<RCUser | null>(null)
+
+  // 1) GATE: confirm there is a real session BEFORE rendering / initializing the
+  //    app. No session -> bounce to /login. This is what makes saves succeed:
+  //    once you're really signed in, the session cookie rides along with every
+  //    /api/data request and the PUT is no longer rejected with 401.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (cancelled) return
+        if (j && j.user && j.user.email) {
+          setUser(j.user)
+          setAuthState('authed')
+        } else {
+          setAuthState('noauth')
+          window.location.href = '/login'
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAuthState('noauth')
+        window.location.href = '/login'
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // 2) Once authed, wire logout + the real user into the header, then init the
+  //    app. We retry until rc-functions.js has finished loading, so a slow
+  //    script load can't silently skip initialization (old bug).
+  useEffect(() => {
+    if (authState !== 'authed') return
+    const w = window as any
+
+    w.rcLogout = async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+      window.location.href = '/login'
+    }
+
+    const fillUser = () => {
+      const email = user?.email || ''
+      const role = (user?.role || 'user')
+      const roleLabel = role.charAt(0).toUpperCase() + role.slice(1)
+      document.querySelectorAll('[data-rc-user]').forEach(el => { el.textContent = email })
+      document.querySelectorAll('[data-rc-role]').forEach(el => { el.textContent = roleLabel })
+    }
+
+    const init = async (): Promise<boolean> => {
+      if (typeof w.initPeriodSelectors !== 'function') return false // script not ready yet
+      fillUser()
       if (typeof w.loadFromServer === 'function') {
         await w.loadFromServer()
       }
-
       w.initPeriodSelectors()
       w.onGlobalChange()
       w.rebuildDaily()
@@ -26,16 +74,35 @@ useEffect(() => {
       w.buildYearlySummary()
       setTimeout(() => w.renderTarget?.(), 100)
       setTimeout(() => w.renderIncentive?.(), 150)
+      return true
     }
-    const timer = setTimeout(init, 300)
+
+    let tries = 0
+    let timer: any
+    const tick = async () => {
+      const ok = await init()
+      if (!ok && tries++ < 50) timer = setTimeout(tick, 150)
+    }
+    timer = setTimeout(tick, 100)
     return () => clearTimeout(timer)
-  }, [])
+  }, [authState, user])
+
+  if (authState !== 'authed') {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'Inter, system-ui, sans-serif', color: '#8B3300', fontSize: 14
+      }}>
+        Checking sign-in…
+      </div>
+    )
+  }
 
   return (
     <>
       <Script
         src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
       />
       <Script src="/rc-functions.js" strategy="afterInteractive" />
       <div dangerouslySetInnerHTML={{ __html: bodyHTML }} />
@@ -95,7 +162,7 @@ const bodyHTML = `
   </select>
   <button class="btn btn-gray" style="font-size:11px">+ Year</button>
   <span style="width:1px;height:20px;background:#ddd;margin:0 4px"></span>
-  <span style="font-size:11px;color:#888">🏢 RC &nbsp;·&nbsp; 👤 <b style="color:#1a73e8">tushar336@gmail.com</b> (admin) &nbsp;·&nbsp; <a href="#" style="color:#666;text-decoration:none">Logout</a></span>
+  <span style="font-size:11px;color:#888">🏢 RC &nbsp;·&nbsp; 👤 <b style="color:#1a73e8" data-rc-user>…</b> (<span data-rc-role>…</span>) &nbsp;·&nbsp; <a href="#" onclick="event.preventDefault();rcLogout&&rcLogout()" style="color:#666;text-decoration:none">Logout</a></span>
   <div style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap">
     <button class="btn btn-dark" onclick="saveAll()">💾 Save</button>
     <button class="btn btn-outline" onclick="exportJSON()">📤 Export JSON</button>
@@ -297,7 +364,7 @@ const bodyHTML = `
   <!-- Auth bar -->
   <div class="auth-bar">
     <span>🔒</span>
-    <span class="auth-badge">👤 tushar336@gmail.com &nbsp;·&nbsp; Admin</span>
+    <span class="auth-badge">👤 <span data-rc-user>…</span> &nbsp;·&nbsp; <span data-rc-role>…</span></span>
     <span id="editModeInd" style="display:none;color:#c44000;font-weight:700;font-size:11px">✏️ Edit Mode Active — click ✏️ on any row</span>
     <span style="margin-left:auto;font-size:11px;color:#555">Edit: <b style="color:#25a244">Permitted (Admin)</b></span>
   </div>
