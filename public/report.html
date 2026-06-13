@@ -82,6 +82,13 @@
   #panel-auth h4{color:var(--brand);margin:14px 0 6px;font-size:14px}
   #dailyTable tr.row-editing td{background:#fffbeb}
   #dailyTable tr.row-editing td.derived-cell{background:#ecfeff}
+  /* Pin Date (left) and Action/Save (right) columns so you never scroll to save */
+  #dailyTable td.col-date, #dailyTable th.col-date{position:sticky;left:0;z-index:3;background:#fff;box-shadow:2px 0 5px -2px rgba(0,0,0,.18)}
+  #dailyTable td.col-act,  #dailyTable th.col-act {position:sticky;right:0;z-index:3;background:#fff;box-shadow:-2px 0 5px -2px rgba(0,0,0,.18);white-space:nowrap}
+  #dailyTable thead th.col-date, #dailyTable thead th.col-act{z-index:5;background:#f5f3ee}
+  #dailyTable tr.row-locked  td.col-date, #dailyTable tr.row-locked  td.col-act{background:#fafaf9}
+  #dailyTable tr.row-past    td.col-date, #dailyTable tr.row-past    td.col-act{background:#f1f5f9}
+  #dailyTable tr.row-editing td.col-date, #dailyTable tr.row-editing td.col-act{background:#fffbeb}
   .lock-badge{font-size:10px;opacity:.7}
   /* Today's KPI card highlight */
   .today-card{background:linear-gradient(135deg,#fff 0%,#dcfce7 100%);border-left:4px solid var(--good)}
@@ -137,16 +144,46 @@
   .formula-note{background:#fffbeb;border:1px dashed #f59e0b;padding:8px 11px;border-radius:6px;font-size:11.5px;color:#78350f;margin-bottom:8px}
   @media print{header,.tabs,.toolbar{display:none}.panel{display:block !important}}
   @media (max-width:640px){
+    /* === Compact mobile layout === */
     table{font-size:11px}
     th,td{padding:5px 4px}
-    .container{padding:8px}
-    header h1{font-size:16px}
+    .container{padding:6px}
+    /* Header: smaller, tighter, hide the long subtitle */
+    header{padding:9px 12px}
+    header h1{font-size:15px;line-height:1.15}
+    header h1 .rc-logo{height:34px;width:34px;margin-right:6px}
+    header .sub{display:none}
+    /* Toolbar: tighter spacing, smaller buttons, wraps onto two lines max */
+    .card{padding:10px;border-radius:10px;margin-bottom:10px}
+    .toolbar{gap:5px;align-items:center}
+    .toolbar .btn{padding:6px 8px;font-size:11px;border-radius:6px}
+    .toolbar select{padding:5px 7px;font-size:12px}
+    #userBadge{font-size:10.5px;padding:3px 7px;margin-left:auto;flex-basis:100%;text-align:center;margin-top:4px}
+    /* Tabs: become a single-line horizontal scrolling strip */
+    .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom-width:1px;padding-bottom:2px;margin:0 -6px 10px;padding-left:6px;padding-right:6px}
+    .tabs::-webkit-scrollbar{height:3px}
+    .tab{padding:7px 10px;font-size:12px;flex-shrink:0;white-space:nowrap}
+    .tab.section-head{display:none}  /* hide "RC MONTH REPORT:" / "DAILY:" / "DERIVED:" / "Admin:" labels */
+    /* Section titles & KPI cards */
+    .section-title{font-size:12px;letter-spacing:.4px}
+    .section-title:before{height:14px}
+    .kpi{padding:11px}
+    .kpi-label{font-size:9.5px}
     .kpi-value{font-size:18px}
+    .help{padding:8px 11px;font-size:11.5px}
+    /* Status pill stays compact */
+    #saveStatus{flex-basis:100%;text-align:center}
   }
   /* Rolling Crunchy's logo in headers */
   .rc-logo{height:42px;width:42px;border-radius:50%;vertical-align:middle;margin-right:8px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);object-fit:cover}
   header h1{display:flex;align-items:center;gap:0}
   .login-box .rc-logo{height:36px;width:36px;margin-right:6px}
+  /* Daily Sales — hide-store column toggles */
+  #dailyTable.hide-cafe      [data-store="cafe"],
+  #dailyTable.hide-rcExpress [data-store="rcExpress"],
+  #dailyTable.hide-truck     [data-store="truck"],
+  #dailyTable.hide-tcs       [data-store="tcs"],
+  #dailyTable.hide-rcf       [data-store="rcf"]{display:none}
 </style>
 </head>
 <body>
@@ -158,6 +195,9 @@
     <div class="sub" id="loginSub">Sign in to access the monthly report</div>
     <div id="loginMsg"></div>
     <form id="loginForm" onsubmit="return false">
+      <label>Franchise Unit
+        <select id="loginUnit" required></select>
+      </label>
       <label>Email
         <input type="email" id="loginEmail" autocomplete="email" required/>
       </label>
@@ -169,6 +209,9 @@
       </label>
       <div class="row">
         <button type="submit" class="btn btn-primary" onclick="handleLoginSubmit()">Login</button>
+      </div>
+      <div style="margin-top:8px;text-align:right">
+        <a href="#" id="forgotLink" onclick="forgotPassword();return false" style="font-size:12px;color:var(--brand2)">Forgot password?</a>
       </div>
       <p class="small" style="margin-top:12px;color:var(--muted)">
         First time? Enter the email your admin authorized and you'll be prompted to set a password.<br/>
@@ -189,6 +232,9 @@
   <!-- TOOLBAR -->
   <div class="card">
     <div class="toolbar">
+      <label class="small" id="unitSwitcherLabel" style="display:none;align-items:center;gap:5px;background:#fef3c7;padding:3px 8px;border-radius:6px">🏢
+        <select id="unitSwitcher" onchange="switchActiveUnit(this.value)" style="font-weight:700"></select>
+      </label>
       <label class="small" style="display:flex;align-items:center;gap:5px">Year:
         <select id="yearSelect" onchange="switchYear(this.value)" style="font-weight:700"></select>
       </label>
@@ -220,6 +266,7 @@
       <button class="tab" data-tab="daily">📅 Daily Sales</button>
       <button class="tab" data-tab="prod">📦 Product Consumption</button>
       <button class="tab" data-tab="incentive">💰 Employee Incentive</button>
+      <button class="tab" data-tab="vendor">💸 Vendor Payout</button>
       <span class="tab section-head">Derived:</span>
       <button class="tab" data-tab="mi">Monthly Input</button>
       <button class="tab" data-tab="ys">Yearly Summary</button>
@@ -238,6 +285,10 @@
         <span><i style="background:#fef3c7"></i>Manual entry</span>
         <span><i style="background:#ecfeff"></i>Auto-calculated</span>
         <span><i style="background:#7c2d12"></i>Month band</span>
+      </div>
+      <div class="toolbar" style="margin-bottom:6px">
+        <button class="btn btn-primary" id="addSiteBtn" onclick="addCustomSite()" title="Add a new store/site row that will appear in Sales, Targets and the WhatsApp summary">＋ Add Site</button>
+        <span class="small" style="color:var(--muted)">Sites hidden from Daily Sales are automatically excluded here.</span>
       </div>
       <div class="scroll-x">
         <table id="salesTable">
@@ -353,6 +404,14 @@
         </label>
         <button class="btn btn-primary" onclick="addDailyRow()">+ Add Day</button>
         <button class="btn btn-secondary" id="editModeBtn" onclick="toggleEditMode()" title="Unlock past saved entries to edit them"></button>
+        <span id="dailyHideStoresWrap" class="small" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px;border:1px dashed var(--line);border-radius:4px">
+          <b style="color:var(--brand)">👁 Hide:</b>
+          <label class="small"><input type="checkbox" data-hs="cafe"/> Café</label>
+          <label class="small"><input type="checkbox" data-hs="rcExpress"/> RC Express</label>
+          <label class="small"><input type="checkbox" data-hs="truck"/> Truck</label>
+          <label class="small"><input type="checkbox" data-hs="tcs"/> TCS</label>
+          <label class="small"><input type="checkbox" data-hs="rcf"/> RCF</label>
+        </span>
         <span class="small" style="margin-left:auto" id="dailyCountInfo"></span>
       </div>
       <div id="editModeBanner" class="help" style="background:#fef3c7;border-left-color:#f59e0b;color:#7c2d12;display:none">
@@ -362,23 +421,23 @@
         <table id="dailyTable">
           <thead>
             <tr>
-              <th rowspan="2">Date</th>
+              <th rowspan="2" class="col-date">Date</th>
               <th rowspan="2">Day</th>
-              <th colspan="4">Café</th>
-              <th colspan="3">RC Express</th>
-              <th colspan="3">Truck</th>
-              <th colspan="3">TCS</th>
-              <th colspan="3">RCF</th>
+              <th colspan="4" data-store="cafe">Café</th>
+              <th colspan="3" data-store="rcExpress">RC Express</th>
+              <th colspan="3" data-store="truck">Truck</th>
+              <th colspan="3" data-store="tcs">TCS</th>
+              <th colspan="3" data-store="rcf">RCF</th>
               <th rowspan="2">All Total</th>
               <th rowspan="2">Δ vs Target</th>
-              <th rowspan="2"></th>
+              <th rowspan="2" class="col-act"></th>
             </tr>
             <tr>
-              <th>UPI</th><th>Online</th><th>Cash</th><th>Total</th>
-              <th>UPI</th><th>Cash</th><th>Total</th>
-              <th>UPI</th><th>Cash</th><th>Total</th>
-              <th>TCS-1</th><th>TCS-2</th><th>Total</th>
-              <th>UPI</th><th>Cash</th><th>Total</th>
+              <th data-store="cafe">UPI</th><th data-store="cafe">Online</th><th data-store="cafe">Cash</th><th data-store="cafe">Total</th>
+              <th data-store="rcExpress">UPI</th><th data-store="rcExpress">Cash</th><th data-store="rcExpress">Total</th>
+              <th data-store="truck">UPI</th><th data-store="truck">Cash</th><th data-store="truck">Total</th>
+              <th data-store="tcs">TCS-1</th><th data-store="tcs">TCS-2</th><th data-store="tcs">Total</th>
+              <th data-store="rcf">UPI</th><th data-store="rcf">Cash</th><th data-store="rcf">Total</th>
             </tr>
           </thead>
           <tbody id="dailyBody"></tbody>
@@ -489,6 +548,69 @@
           </thead>
           <tbody id="incBody"></tbody>
           <tfoot><tr class="total-row" id="incTotalRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============== VENDOR PAYOUT ============== -->
+    <div class="panel" id="panel-vendor">
+      <h3 class="section-title">💸 Vendor Payout</h3>
+      <div class="help">
+        Pick a <b>month</b> and work on its current payment sheet: add vendor rows, log payments, get it approved.
+        When you mark a sheet as <b>Payment Done</b> it moves to <b>History</b> and a new sheet is auto-created with any
+        remaining pending balances carried forward. Toggle <b>Show History</b> to view past paid sheets for the month.
+      </div>
+      <div class="toolbar" style="margin-bottom:8px">
+        <label class="small" style="display:flex;align-items:center;gap:5px">Month:
+          <select id="vpMonthPicker" onchange="vpOnMonthChange()"></select>
+        </label>
+        <label class="small" style="display:flex;align-items:center;gap:5px">Sheet:
+          <select id="vpSheetPicker" onchange="renderVendorPayout()"></select>
+        </label>
+        <button class="btn btn-primary" id="vpNewSheetBtn" onclick="addPayoutSheet()">+ New Sheet</button>
+        <span id="vpApprovalStatus" class="small"></span>
+        <label class="small" style="display:flex;align-items:center;gap:5px">
+          <input type="checkbox" id="vpShowHistory" onchange="renderVendorPayout()"/> Show History
+        </label>
+        <button class="btn btn-primary" id="vpAddVendorBtn" onclick="addVendor()">+ Add Vendor</button>
+        <button class="btn btn-primary" id="vpAddPayoutBtn" onclick="addPayoutRow()">+ Add Row</button>
+        <button class="btn btn-secondary" id="vpCreatorApproveBtn" onclick="toggleCreatorApproval()"></button>
+        <button class="btn btn-secondary" id="vpManagerApproveBtn" onclick="toggleManagerApproval()"></button>
+        <button class="btn btn-secondary" id="vpPaidBtn" onclick="markPaymentDone()"></button>
+        <button class="btn btn-secondary" onclick="exportVendorPayoutExcel()">📥 Excel</button>
+        <button class="btn btn-wa" onclick="shareVendorPayoutWA()">💬 WA</button>
+        <span id="vpApproverPhonePill" class="small" style="display:none;cursor:pointer;padding:4px 8px;border:1px dashed var(--line);border-radius:4px;color:var(--brand)" onclick="setVpApproverPhone()" title="Click to edit the approver's WhatsApp number"></span>
+        <button class="btn btn-danger" id="vpResetBtn" onclick="resetVendorPayoutsManual()" style="display:none" title="Admin only — wipe every vendor and every sheet (cannot be undone)">🗑️ Reset All</button>
+      </div>
+
+      <h4 style="margin:6px 0 4px;color:var(--brand);font-size:13px">📒 Vendor Master <span class="small" style="font-weight:normal;color:var(--muted)">— shared across all months/years for this unit</span></h4>
+      <div class="scroll-x" style="margin-bottom:14px">
+        <table id="vpVendorTable">
+          <thead>
+            <tr><th>Name</th><th>Category</th><th>Contact</th><th>Phone</th><th>GSTIN</th><th>Bank / UPI</th><th></th></tr>
+          </thead>
+          <tbody id="vpVendorBody"></tbody>
+        </table>
+      </div>
+
+      <h4 style="margin:8px 0 4px;color:var(--brand);font-size:13px">💸 Payouts — <span id="vpMonthLabel"></span></h4>
+      <div class="scroll-x">
+        <table id="vpPayoutTable">
+          <thead>
+            <tr>
+              <th>Vendor</th>
+              <th id="vpHeadPrev">Previous Pending ₹</th>
+              <th id="vpHeadDue">Total Due ₹</th>
+              <th>Total Payment ₹</th>
+              <th>Total Pending ₹</th>
+              <th>Mode</th>
+              <th>Ref / Invoice</th>
+              <th>Remark</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="vpPayoutBody"></tbody>
+          <tfoot><tr class="total-row" id="vpTotalRow"></tr></tfoot>
         </table>
       </div>
     </div>
@@ -657,6 +779,18 @@
       </div>
       <div class="small" style="color:var(--muted);margin-bottom:4px">The designated <b>Creator</b> can add employees / leave / absent / fix incentive. The designated <b>Approver</b> can approve &amp; lock the sheet. Admins always have both powers.</div>
 
+      <h4>🏢 Franchise Unit Master <span class="small" style="font-weight:normal;color:var(--muted)">— each franchise has its own report data; assign emails who can access</span></h4>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <input type="text" id="newUnitName" placeholder="Franchise unit name (e.g. RC Bhubaneswar)" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;min-width:280px"/>
+        <button class="btn btn-primary" onclick="addFranchiseUnit()">+ Add Franchise Unit</button>
+      </div>
+      <div class="scroll-x" style="margin-bottom:14px">
+        <table>
+          <thead><tr><th>Unit Name</th><th>Type</th><th>Allowed Emails</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="unitMasterBody"></tbody>
+        </table>
+      </div>
+
       <h4>Registered Users <span class="small" style="font-weight:normal;color:var(--muted)">— delete, reset password, change role; incentive designations shown as badges</span></h4>
       <div class="scroll-x">
         <table>
@@ -785,8 +919,23 @@ function monthActionBtn(m){
   }
   return `<span class="small" style="color:var(--muted)" title="Past month — use 🔓 Edit Past Data to modify">🔒 read-only</span>`;
 }
-const STORES = ["RC Express","Food Truck","Café","TCS","Events"];
-const INV_SITES = ["Store","Food Truck","Rolling Express","TCS","Café & Kitchen"];
+// RC defaults — these are the per-store / per-site arrays used by Sales / Inventory / Target.
+// They become `let` so a franchise unit can collapse them to a single site (its own name).
+const RC_STORES    = ["RC Express","Food Truck","Café","TCS","Events"];
+const RC_INV_SITES = ["Store","Food Truck","Rolling Express","TCS","Café & Kitchen"];
+let STORES    = RC_STORES.slice();
+let INV_SITES = RC_INV_SITES.slice();
+// Apply a unit's site layout — call whenever the current unit changes.
+function applyUnitLayout(unit){
+  if (unit && unit.isFranchise){
+    const name = (unit.name || "Main").trim() || "Main";
+    STORES    = [name];
+    INV_SITES = [name];
+  } else {
+    STORES    = RC_STORES.slice();
+    INV_SITES = RC_INV_SITES.slice();
+  }
+}
 const DAYS_IN_MONTH = {Jan:31,Feb:28,Mar:31,Apr:30,May:31,Jun:30,Jul:31,Aug:31,Sep:30,Oct:31,Nov:30,Dec:31};
 
 /* ====================================================================== */
@@ -892,16 +1041,37 @@ function seedData(){
 /*  STATE                                                                  */
 /* ====================================================================== */
 const STORE_KEY = "rc_monthly_2026_v4";
-// state.years[year] = { rc, mn, daily }
-// state.rc / state.mn / state.daily are rebound aliases to the current year's data.
+// Multi-unit (franchise) data model.
+//   state.units[unitId] = { name, isFranchise, allowedEmails:[], years:{2026:{...}} }
+//   state.currentUnit picks which unit's data is being shown.
+//   state.years / state.rc / state.mn / state.daily are rebound aliases to that unit's current-year data.
 let state = {
+  currentUnit: "rc",
+  units: {},
   currentYear: 2026,
-  years: {},
+  years: {},            // alias to state.units[currentUnit].years (set by bindUnit)
   editMode: false,
-  auth: { users:{}, authorizedEmails:[], session:null },
-  // Aliases set by bindYear()
+  auth: { users:{}, authorizedEmails:[], session:null, incentiveRoles:{ approver:"", creator:"" } },
+  // Per-year aliases (set by bindYear)
   year: 2026, rc: null, mn: null, daily: null
 };
+const RC_UNIT_ID = "rc";
+function newUnitId(){ return "u_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
+function makeBlankUnit(name, isFranchise){
+  return { name: name || "Unit", isFranchise: !!isFranchise, allowedEmails: [], years: {} };
+}
+// Switch unit — re-binds years alias and applies the site layout.
+function bindUnit(id){
+  if (!state.units[id]){
+    // Auto-create an empty unit if missing (e.g., legacy code paths)
+    state.units[id] = makeBlankUnit(id === RC_UNIT_ID ? "RC (Rolling Crunchys)" : id, id !== RC_UNIT_ID);
+  }
+  state.currentUnit = id;
+  state.years = state.units[id].years;
+  applyUnitLayout(state.units[id]);
+  // Re-bind year to current
+  bindYear(state.currentYear || 2026);
+}
 const CONSUMPTION_SITES = ["Café","Truck","Express","TCS"];
 const DEVIATION_THRESHOLD = 3; // red flag when |Actual Deviation| > 3 (kg/L)
 
@@ -926,15 +1096,9 @@ function seedConsumptionApr(){
   };
 }
 function makeYearData(y){
-  if (y === 2026){
-    const seed = seedData();
-    // 2026 seed: Jan-Apr already "saved" (locked); current month & future open
-    const locks = { Jan:true, Feb:true, Mar:true, Apr:true };
-    return { rc: seed.rc, mn: seed.mn, daily: seedDaily(), locks,
-             products: defaultProducts2026(), consumption: { Apr: seedConsumptionApr() },
-             incentive: {} };
-  }
-  // Blank rc/mn for non-seed years (no pre-filled data, no locks)
+  // DATABASE-ONLY: no pre-filled sample data of any kind. Every year starts
+  // blank; real numbers come exclusively from the server (/api/data).
+  // Products start empty too — use the "+ Add Item" button to add them.
   return {
     rc: blankRC(),
     mn: (function(){ const x={}; MONTHS.forEach(m=> x[m]={staffFood:0,dump:0,maintenance:0,otherIncome:0}); return x; })(),
@@ -948,7 +1112,7 @@ function makeYearData(y){
 function bindYear(y){
   if (!state.years[y]) state.years[y] = makeYearData(y);
   if (!state.years[y].locks) state.years[y].locks = {};
-  if (!state.years[y].products) state.years[y].products = y === 2026 ? defaultProducts2026() : [];
+  if (!state.years[y].products) state.years[y].products = [];
   if (!state.years[y].consumption) state.years[y].consumption = {};
   if (!state.years[y].incentive) state.years[y].incentive = {};
   state.currentYear = y;
@@ -1010,50 +1174,210 @@ function seedDaily(){
   };
 }
 
-function loadState(){
-  // 1) Shared link via hash
-  if (location.hash.startsWith("#d=")) {
-    try{
-      const compressed = decodeURIComponent(location.hash.slice(3));
-      const json = LZString.decompressFromEncodedURIComponent(compressed);
-      const parsed = JSON.parse(json);
-      ingestParsed(parsed);
-      flash("✓ Loaded shared data from link");
-      return;
-    }catch(e){ console.warn("hash decode failed",e) }
+/* ===== STORE<->UNITS adapters (DB stays in old store format) ===== */
+const __RCADAPT = (function(){
+// ===================================================================
+// STORE <-> UNITS adapters. The Neon DB holds the OLD `store` format.
+// The new UI works internally in `units` format. These translate at I/O.
+// ===================================================================
+const MN3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const SALES_ORDER = ['RC Express','Food Truck','Café','TCS','Events'];
+const INV_ORDER   = ['Store','Food Truck','Rolling Express','TCS','Café & Kitchen'];
+const TGT_ORDER   = ['RC Express','Food Truck','Café','TCS','Events'];
+const PROD_ID = {paneer:'p_paneer',chicken:'p_chicken','ice cream':'p_icecream',icecream:'p_icecream'};
+function _key(name){ return '2026-' + String(MN3.indexOf(name)+1).padStart(2,'0'); }
+function _name(key){ return MN3[parseInt(key.split('-')[1],10)-1]; }
+function _iso(dmy){ const [d,m,y]=dmy.split('/'); return `${y}-${m}-${d}`; }
+function _dmy(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+function _dayName(iso){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(iso+'T00:00:00').getDay()]; }
+function _n(v){ const x = typeof v==='number'?v:parseFloat(v); return Number.isFinite(x)?x:0; }
+
+// -------- STORE  ->  UNITS payload (what loadState consumes) --------
+function storeToUnits(S){
+  const entries = [];
+  for (const key of Object.keys(S.daily||{})){
+    for (const r of S.daily[key]){
+      const [date,day,cu,co,cc,eu,ec,tu,tc,t1,t2,tu2,tc2,ru,rc] = r.concat([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]).slice(0,15);
+      const iso = _iso(date);
+      entries.push({ date:iso, day,
+        cafe:{upi:_n(cu),online:_n(co),cash:_n(cc)},
+        rcExpress:{upi:_n(eu),cash:_n(ec)},
+        truck:{upi:_n(tu),cash:_n(tc)},
+        tcs:{t1:_n(t1),t2:_n(t2)},
+        rcf:{upi:_n(tu2)+_n(ru), cash:_n(tc2)+_n(rc)},   // old TCS-UPI/Cash + old RCF -> rcf (lossless on total)
+        locked: iso < _todayISO() });
+    }
   }
-  // 2) localStorage
-  const raw = localStorage.getItem(STORE_KEY);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      ingestParsed(parsed);
-      return;
-    } catch(e){}
+  entries.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+
+  const sales={}, inv={}, pur={}, tgt={}, mn={}, consumption={};
+  for (const k of Object.keys(S.sales||{})){
+    const m=_name(k), md=S.sales[k]||{}, st={};
+    (md.stores||[]).forEach((row,i)=>{ const nm=SALES_ORDER[i]; if(!nm)return;
+      st[nm]={dineOrders:_n(row[0]),hdOrders:_n(row[1]),dineAmt:_n(row[2]),hdAmt:_n(row[3]),creditAmt:_n(row[4]),focAmt:_n(row[5])}; });
+    sales[m]=st;
   }
-  // 3) Fresh — seed with 2026
-  state.years = { 2026: makeYearData(2026) };
-  bindYear(2026);
-  state.auth = { users:{}, authorizedEmails:[], session:null };
-  state.editMode = false;
+  for (const k of Object.keys(S.inv||{})){
+    const m=_name(k), st={};
+    (S.inv[k]||[]).forEach((row,i)=>{ const nm=INV_ORDER[i]; if(!nm)return; st[nm]={start:_n(row[0]),close:_n(row[1])}; });
+    inv[m]=st;
+  }
+  for (const k of Object.keys(S.purchase||{})) pur[_name(k)]=_n(S.purchase[k]);
+  for (const k of Object.keys(S.target||{})){
+    const m=_name(k), st={};
+    (S.target[k]||[]).forEach((o,i)=>{ const nm=TGT_ORDER[i]; if(!nm)return; st[nm]={target:_n(o.t),workingDays:_n(o.w)||30}; });
+    tgt[m]=st;
+  }
+  for (let i=0;i<12;i++) mn[MN3[i]]={staffFood:0,dump:0,maintenance:0,otherIncome:0};
+  for (const k of Object.keys(S.manual||{})){
+    const a=(S.manual[k]||[]).concat([0,0,0,0]); mn[_name(k)]={staffFood:_n(a[0]),dump:_n(a[1]),maintenance:_n(a[2]),otherIncome:_n(a[3])};
+  }
+  const products=[{id:'p_chicken',name:'Chicken',unit:'kg'},{id:'p_paneer',name:'Paneer',unit:'kg'},{id:'p_icecream',name:'Ice cream',unit:'L'}];
+  const seen=new Set(products.map(p=>p.id));
+  for (const k of Object.keys(S.cons||{})){
+    const m=_name(k), cm={};
+    for (const it of (S.cons[k]||[])){
+      let pid=PROD_ID[(it.name||'').trim().toLowerCase()];
+      if(!pid){ pid='p_'+(it.name||'item').toLowerCase().replace(/[^a-z0-9]/g,''); if(!seen.has(pid)){products.push({id:pid,name:it.name||'',unit:it.unit||'kg'});seen.add(pid);} }
+      cm[pid]={sites:{'Café':_n(it.cafe),'Truck':_n(it.truck),'Express':_n(it.express),'TCS':_n(it.tcs)},
+               opening:_n(it.opening),purchase:_n(it.purchase),wastage:_n(it.wastage),staffFood:_n(it.staffFood),closing:_n(it.closing)};
+    }
+    consumption[m]=cm;
+  }
+  const incentive={};
+  for (const k of Object.keys(S.incentive||{})){
+    const emps=(S.incentive[k]||[]).map(e=>({name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
+      pct:(_n(e.pct)||0)/100, leaveDays:_n(e.leave), absent:!!e.absent, fixIncentive:e.fixInc||'', actualOverride:e.mgrOverride||'', remark:''}));
+    incentive[_name(k)]={days:30,approved:false,employees:emps,approvedAt:null,approvedBy:'',incentiveDate:`${k}-28`,totalIncentive:0};
+  }
+
+  const year2026={ mn, rc:{inv,pur,tgt,sales},
+    daily:{entries,hiddenStores:[],perDayTarget:107000}, locks:{},
+    products, incentive, consumption, vendorPayouts:{sheets:{},approved:{}},
+    __storeLocks:{ purLocked:S.purLocked||{}, invLocked:S.invLocked||{}, salesLocked:S.salesLocked||{} } };
+
+  return { units:{ rc:{ name:'RC (Rolling Crunchys)', years:{'2026':year2026}, vendors:[], isFranchise:false, allowedEmails:[] } },
+           currentUnit:'rc', currentYear:2026, editMode:false, incentiveRoles:{creator:'',approver:''} };
+}
+
+// -------- UNITS state  ->  STORE (what we PUT to /api/data) --------
+function unitsToStore(state){
+  const rc = (state.units && state.units.rc) || {};
+  const y = (rc.years && (rc.years['2026']||rc.years[2026])) || {};
+  const S = { daily:{}, purchase:{}, inv:{}, sales:{}, manual:{}, cons:{}, purLocked:{}, invLocked:{}, salesLocked:{}, target:{}, incentive:{} };
+  const sl = y.__storeLocks || {};
+  S.purLocked = Object.assign({}, sl.purLocked); S.invLocked = Object.assign({}, sl.invLocked); S.salesLocked = Object.assign({}, sl.salesLocked);
+
+  // daily -> grouped by month
+  for (const e of ((y.daily&&y.daily.entries)||[])){
+    const iso=e.date; const k='2026-'+iso.split('-')[1];
+    (S.daily[k]=S.daily[k]||[]).push([ _dmy(iso), e.day||_dayName(iso),
+      _n(e.cafe.upi),_n(e.cafe.online),_n(e.cafe.cash),
+      _n(e.rcExpress.upi),_n(e.rcExpress.cash),
+      _n(e.truck.upi),_n(e.truck.cash),
+      _n(e.tcs.t1),_n(e.tcs.t2),
+      0,0,                                   // tcsu,tcsc = 0 (new UI's rcf lives in RCF cols)
+      _n(e.rcf.upi),_n(e.rcf.cash) ]);
+  }
+  const rcsec = y.rc || {};
+  for (const m of Object.keys(rcsec.sales||{})){
+    const k=_key(m), st=rcsec.sales[m]; const rows=SALES_ORDER.map(nm=>{const s=st[nm]||{}; return [_n(s.dineOrders),_n(s.hdOrders),_n(s.dineAmt),_n(s.hdAmt),_n(s.creditAmt),_n(s.focAmt)];});
+    const sub=rows.reduce((a,r)=>a+r[2]+r[3]+r[4]+r[5],0);
+    S.sales[k]={sub, locked: !!S.salesLocked[k], stores:rows};
+  }
+  for (const m of Object.keys(rcsec.inv||{})){
+    const k=_key(m), st=rcsec.inv[m]; S.inv[k]=INV_ORDER.map(nm=>{const s=st[nm]||{}; return [_n(s.start),_n(s.close)];});
+  }
+  for (const m of Object.keys(rcsec.pur||{})) S.purchase[_key(m)]=_n(rcsec.pur[m]);
+  for (const m of Object.keys(rcsec.tgt||{})){
+    const k=_key(m), st=rcsec.tgt[m]; S.target[k]=TGT_ORDER.map(nm=>{const s=st[nm]||{}; return {t:_n(s.target),w:_n(s.workingDays)||30};});
+  }
+  for (const m of Object.keys(y.mn||{})){ const x=y.mn[m]; if(!x)continue; S.manual[_key(m)]=[_n(x.staffFood),_n(x.dump),_n(x.maintenance),_n(x.otherIncome)]; }
+  const prodById={}; (y.products||[]).forEach(p=>prodById[p.id]=p);
+  for (const m of Object.keys(y.consumption||{})){
+    const k=_key(m), cm=y.consumption[m], arr=[];
+    for (const pid of Object.keys(cm||{})){ const c=cm[pid], p=prodById[pid]||{name:pid,unit:'kg'}, si=c.sites||{};
+      arr.push({name:p.name,unit:p.unit,cafe:_n(si['Café']),truck:_n(si['Truck']),express:_n(si['Express']),tcs:_n(si['TCS']),
+                opening:_n(c.opening),purchase:_n(c.purchase),wastage:_n(c.wastage),staffFood:_n(c.staffFood),closing:_n(c.closing)}); }
+    if(arr.length) S.cons[k]=arr;
+  }
+  for (const m of Object.keys(y.incentive||{})){
+    const k=_key(m), inc=y.incentive[m]||{}; const emps=(inc.employees||[]).map(e=>({name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
+      pct:Math.round((_n(e.pct)||0)*100), leave:_n(e.leaveDays), absent:!!e.absent, fixInc:e.fixIncentive||'', mgrOverride:e.actualOverride||'', actualInc:''}));
+    if(emps.length) S.incentive[k]=emps;
+  }
+  return S;
+}
+function _todayISO(){ return new Date().toISOString().slice(0,10); }
+
+return { storeToUnits, unitsToStore };
+
+})();
+
+async function loadState(){
+  // DATABASE-ONLY load. The shared state lives in Neon and is fetched via
+  // /api/data. No localStorage, no URL-hash, no baked-in seed data.
+  let payload = {};
+  try {
+    const r = await fetch('/api/data?t=' + Date.now(), { cache: 'no-store' });
+    if (r.status === 401){ topRedirectLogin(); return; }
+    if (r.ok){ const j = await r.json(); payload = (j && j.data) || {}; }
+    else { console.error('Load data HTTP ' + r.status); }
+  } catch(e){ console.error('Load data failed', e); }
+
+  // If Neon holds the OLD store format, translate it to units in-memory.
+  if (payload && !payload.units && (payload.daily || payload.sales || payload.inv)){
+    try { payload = __RCADAPT.storeToUnits(payload); } catch(e){ console.error('store->units failed', e); }
+  }
+  // Units
+  if (payload.units && typeof payload.units === 'object' && Object.keys(payload.units).length){
+    state.units = payload.units;
+  } else {
+    state.units = {};
+    state.units[RC_UNIT_ID] = makeBlankUnit('RC (Rolling Crunchys)', false);
+  }
+  if (!state.units[RC_UNIT_ID]) state.units[RC_UNIT_ID] = makeBlankUnit('RC (Rolling Crunchys)', false);
+
+  state.currentUnit = (payload.currentUnit && state.units[payload.currentUnit]) ? payload.currentUnit : RC_UNIT_ID;
+  state.currentYear = +(payload.currentYear || 2026);
+  state.editMode = !!payload.editMode;
+  if (!state.auth) state.auth = { users:{}, authorizedEmails:[], session:null, incentiveRoles:{ approver:"", creator:"" } };
+  state.auth.incentiveRoles = payload.incentiveRoles || { approver:"", creator:"" };
+
+  bindUnit(state.currentUnit);
+  if (!state.years[state.currentYear]) state.years[state.currentYear] = makeYearData(state.currentYear);
+  bindYear(state.currentYear);
 }
 function ingestParsed(parsed){
   state.auth = parsed.auth || { users:{}, authorizedEmails:[], session:null };
   if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
   state.editMode = !!parsed.editMode;
-  if (parsed.years && typeof parsed.years === "object" && Object.keys(parsed.years).length){
-    state.years = parsed.years;
-    bindYear(+(parsed.currentYear || parsed.year || 2026));
-  } else if (parsed.rc) {
-    // Legacy single-year format → migrate into years map
-    const y = parsed.year || 2026;
-    state.years = {};
-    state.years[y] = { rc: parsed.rc, mn: parsed.mn || {}, daily: parsed.daily || seedDaily() };
-    bindYear(y);
+
+  // ----- Multi-unit migration -----
+  // New format: parsed.units = { rc:{...}, other:{...} } + parsed.currentUnit
+  // Legacy:     parsed.years = {...}  (the old single-unit form) → migrate to units.rc
+  if (parsed.units && typeof parsed.units === "object" && Object.keys(parsed.units).length){
+    state.units = parsed.units;
   } else {
-    state.years = { 2026: makeYearData(2026) };
-    bindYear(2026);
+    state.units = {};
+    state.units[RC_UNIT_ID] = makeBlankUnit("RC (Rolling Crunchys)", false);
+    // Pull old data
+    if (parsed.years && typeof parsed.years === "object" && Object.keys(parsed.years).length){
+      state.units[RC_UNIT_ID].years = parsed.years;
+    } else if (parsed.rc) {
+      const y = parsed.year || 2026;
+      state.units[RC_UNIT_ID].years[y] = { rc: parsed.rc, mn: parsed.mn || {}, daily: parsed.daily || { perDayTarget:107000, editMode:false, entries:[] } };
+    }
   }
+  // Make sure the RC unit always exists (it's the default)
+  if (!state.units[RC_UNIT_ID]) state.units[RC_UNIT_ID] = makeBlankUnit("RC (Rolling Crunchys)", false);
+  // Pick the unit
+  state.currentUnit = parsed.currentUnit && state.units[parsed.currentUnit] ? parsed.currentUnit : RC_UNIT_ID;
+  state.currentYear = +(parsed.currentYear || parsed.year || 2026);
+
+  bindUnit(state.currentUnit);
+
+  // Ensure 2026 exists in the current unit's years
   if (!state.years[2026]) state.years[2026] = makeYearData(2026);
   // Drop legacy field
   Object.values(state.years).forEach(y => { if (y.daily && y.daily.editMode !== undefined) delete y.daily.editMode; });
@@ -1134,12 +1458,35 @@ document.addEventListener("focusin", e => {
    completely natural everywhere. */
 let _renderTimer = null;
 let _pendingRefresh = false;
+// Only the report's data-cell inputs (which carry data-m/s/f/eid/pid/idx/…) should
+// defer the refresh while typing. Form inputs (login fields, "new franchise unit
+// name", "create user" email/password, etc.) should let saveAll refresh immediately.
+const DATA_INPUT_ATTRS = ["m","s","f","u","eid","ef","pid","pf","cf","csite","idx","site"];
 function isEditingInput(){
   const ae = document.activeElement;
-  return !!(ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") && !ae.disabled);
+  if (!ae) return false;
+  if (ae.tagName !== "INPUT" && ae.tagName !== "TEXTAREA") return false;
+  if (ae.disabled) return false;
+  // True only if the focused input is a report data cell.
+  return DATA_INPUT_ATTRS.some(k => ae.dataset && ae.dataset[k] !== undefined);
+}
+let _saveTimer = null;
+function _persistData(){
+  const data = __RCADAPT.unitsToStore(state);  // write OLD store format to Neon (DB structure unchanged)
+  return fetch('/api/data', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data }),
+    keepalive: true
+  }).then(async (r) => {
+    if (r.status === 401){ topRedirectLogin(); return; }
+    if (!r.ok){ const t = await r.text().catch(()=> ''); console.error('Save failed', r.status, t); flash('⚠️ Save failed (HTTP ' + r.status + ')'); }
+  }).catch((e) => { console.error('Save network error', e); flash('⚠️ Network error — not saved'); });
 }
 function saveAll(silent){
-  localStorage.setItem(STORE_KEY, JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode, auth:state.auth}));
+  // DATABASE-ONLY persistence (debounced). No localStorage.
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_persistData, 600);
   if (!silent) flash("✓ Saved");
   if (isEditingInput()){
     // Defer the visual rebuild until the user finishes with this field.
@@ -1196,12 +1543,24 @@ function storeRowOrders(m,s){
   return num(x.dineOrders)+num(x.hdOrders);
 }
 function monthSalesTotal(m){
-  let t=0; STORES.forEach(s=> t+=storeRowTotal(m,s)); return t;
+  // Sum only over visible (non-hidden) stores so the Sub-Total matches what the user sees.
+  let t=0;
+  try { effectiveStores().forEach(s => t += storeRowTotal(m, s)); }
+  catch(e){ STORES.forEach(s => t += storeRowTotal(m, s)); }
+  return t;
 }
 
 // INVENTORY — derived from RC sheet ②
-function monthInvStart(m){ let t=0; INV_SITES.forEach(s=> t+=num(state.rc.inv[m][s].start)); return t; }
-function monthInvClose(m){ let t=0; INV_SITES.forEach(s=> t+=num(state.rc.inv[m][s].close)); return t; }
+function monthInvStart(m){
+  let t=0;
+  effectiveInvSites().forEach(s => { if (state.rc.inv[m][s]) t += num(state.rc.inv[m][s].start); });
+  return t;
+}
+function monthInvClose(m){
+  let t=0;
+  effectiveInvSites().forEach(s => { if (state.rc.inv[m][s]) t += num(state.rc.inv[m][s].close); });
+  return t;
+}
 
 // FOOD COST — derived from ②③①
 function monthFoodCost(m){ return monthInvStart(m) + num(state.rc.pur[m]) - monthInvClose(m); }
@@ -1227,6 +1586,9 @@ function monthRow(m){
 function renderSales(){
   const tbody = document.getElementById("salesBody");
   let html = "";
+  const stores = effectiveStores();
+  const unit = state.units[state.currentUnit];
+  const customSet = new Set((unit && unit.customSites) || []);
   MONTHS.forEach(m=>{
     const subTot = monthSalesTotal(m);
     const locked = isMonthLocked(m);
@@ -1236,15 +1598,25 @@ function renderSales(){
         <span style="float:right;display:inline-flex;align-items:center;gap:6px;font-weight:normal;text-transform:none">${monthActionBtn(m)}</span>
         ${m} ${state.year}  ·  Sub-Total: ${fmt(subTot)}${bandLock}
       </td></tr>`;
-    STORES.forEach(s=>{
+    if (!stores.length){
+      html += `<tr><td colspan="11" class="small" style="text-align:center;color:var(--muted);padding:12px">All sites are hidden. Untick a site in Daily Sales to show it here.</td></tr>`;
+      return;
+    }
+    stores.forEach(s=>{
+      // Lazily initialise data for newly-added custom sites so we don't crash.
+      if (!state.rc.sales[m][s]) state.rc.sales[m][s] = blankSalesRow();
       const x = state.rc.sales[m][s];
       const totalOrders = storeRowOrders(m,s);
       const rowTotal = storeRowTotal(m,s);
       const days = DAYS_IN_MONTH[m] || 30;
       const avg = days? (totalOrders/days).toFixed(2) : "0";
       const trCls = locked ? "row-locked-month" : "";
+      const isCustom = customSet.has(s);
+      const labelExtra = isCustom
+        ? ` <button class="btn btn-danger" style="padding:1px 5px;font-size:9px;margin-left:4px" onclick="removeCustomSite('${s.replace(/'/g, "\\'")}')" title="Remove this custom site">×</button>`
+        : "";
       html += `<tr class="${trCls}">
-        <td><b>${s}</b></td>
+        <td><b>${s}</b>${labelExtra}</td>
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.dineOrders}" data-m="${m}" data-s="${s}" data-f="dineOrders" ${dis}/></td>
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.hdOrders}" data-m="${m}" data-s="${s}" data-f="hdOrders" ${dis}/></td>
         <td class="derived-cell">${fmt0(totalOrders)}</td>
@@ -1254,7 +1626,7 @@ function renderSales(){
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.creditAmt}" data-m="${m}" data-s="${s}" data-f="creditAmt" ${dis}/></td>
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.focAmt}" data-m="${m}" data-s="${s}" data-f="focAmt" ${dis}/></td>
         <td class="derived-cell"><b>${fmt(rowTotal)}</b></td>
-        <td class="derived-cell">${s===STORES[0] ? "<b>"+fmt(subTot)+"</b>" : ""}</td>
+        <td class="derived-cell">${s===stores[0] ? "<b>"+fmt(subTot)+"</b>" : ""}</td>
       </tr>`;
     });
   });
@@ -1285,13 +1657,18 @@ function renderInventory(){
   });
   monthRowEl.innerHTML = mh;
   subRowEl.innerHTML = sh;
-  // Body
+  // Body — only show sites whose Daily Sales counterpart is not hidden.
   const body = document.getElementById("invBody");
   let html = "";
-  INV_SITES.forEach(s=>{
+  const visibleSites = effectiveInvSites();
+  if (!visibleSites.length){
+    html += `<tr><td colspan="${1 + MONTHS.length * 2}" class="small" style="text-align:center;color:var(--muted);padding:12px">All sites are hidden — untick a site in Daily Sales to show inventory here.</td></tr>`;
+  }
+  visibleSites.forEach(s=>{
     html += `<tr><td><b>${s}</b></td>`;
     MONTHS.forEach(m=>{
       const dis = isMonthLocked(m) ? "disabled" : "";
+      if (!state.rc.inv[m][s]) state.rc.inv[m][s] = blankInvRow();
       const x = state.rc.inv[m][s];
       html += `<td><input type="text" inputmode="decimal" class="numinput" value="${x.start}" data-m="${m}" data-s="${s}" data-f="start" ${dis}/></td>`;
       html += `<td><input type="text" inputmode="decimal" class="numinput" value="${x.close}" data-m="${m}" data-s="${s}" data-f="close" ${dis}/></td>`;
@@ -1410,7 +1787,8 @@ function renderTargets(){
   const asOfDate = dateInput ? dateInput.value : defaultTargetAsOfDate(m);
   const daysEntered = daysEnteredInMonth(m, asOfDate);
 
-  STORES.forEach(s=>{
+  effectiveStores().forEach(s=>{
+    if (!state.rc.tgt[m][s]) state.rc.tgt[m][s] = { target:0, workingDays:30 };
     const t = state.rc.tgt[m][s];
     const ach = storeAchievedFromDaily(m, s, asOfDate);
     const dayT = num(t.workingDays)? (num(t.target)/num(t.workingDays)) : 0;
@@ -1639,35 +2017,44 @@ function renderTodaySection(){
   dateEl.textContent = pretty;
 
   const t = dailyEntryTotals(entry);
-  // Per-unit cards
+  const hidden = (state.daily && Array.isArray(state.daily.hiddenStores)) ? state.daily.hiddenStores : [];
+  // Per-unit cards — skip any hidden store so the dashboard mirrors the Daily Sales view
   const units = [
     { key:"cafe",      label:"Café",       v: t.cafe },
     { key:"rcExpress", label:"RC Express", v: t.rcExpress },
     { key:"truck",     label:"Truck",      v: t.truck },
     { key:"tcs",       label:"TCS",        v: t.tcs },
     { key:"rcf",       label:"RCF",        v: t.rcf }
-  ];
+  ].filter(u => !hidden.includes(u.key));
   unitsEl.innerHTML = units.map(u =>
     `<div class="today-unit-card">
        <div class="today-unit-label">${u.label}</div>
        <div class="today-unit-value">${fmt(u.v)}</div>
      </div>`).join("");
-  // Summary: total / target / missed (or excess)
+  // Summary: total / target / missed (or excess) — total already respects hidden stores
   const total = t.all;
   const missed = target - total;
   const missedLabel = missed > 0 ? "Missed vs Target" : "Above Target by";
   const missedCls = missed > 0 ? "badge-bad" : "badge-good";
   const missedVal = Math.abs(missed);
+  const labelMap = {cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"TCS",rcf:"RCF"};
+  const hiddenLabels = hidden.map(k => labelMap[k]).filter(Boolean);
+  const exclNote = hiddenLabels.length
+    ? `Excludes ${hiddenLabels.join(", ")} (hidden by user)`
+    : `Excludes RCF (matches your sheet)`;
+  const grandNote = hidden.includes("rcf")
+    ? `Grand total: ${fmt(t.grand)}`
+    : `Grand total incl. RCF: ${fmt(t.grand)}`;
   sumEl.innerHTML = `
     <div class="kpi" style="border-left-color:var(--good)"><div class="kpi-label">Last Closed Day — Total Sales</div>
       <div class="kpi-value">${fmt(total)}</div>
-      <div class="kpi-sub">Excludes RCF (matches your sheet)</div></div>
+      <div class="kpi-sub">${exclNote}</div></div>
     <div class="kpi" style="border-left-color:var(--brand2)"><div class="kpi-label">Per-Day Target</div>
       <div class="kpi-value">${fmt(target)}</div>
       <div class="kpi-sub">${target>0? ((total*100/target).toFixed(1)+"% achieved") : "Set a target in Daily tab"}</div></div>
     <div class="kpi" style="border-left-color:${missed>0?'var(--bad)':'var(--good)'}"><div class="kpi-label">${missedLabel}</div>
       <div class="kpi-value ${missedCls}">${fmt(missedVal)}</div>
-      <div class="kpi-sub">Grand total incl. RCF: ${fmt(t.grand)}</div></div>
+      <div class="kpi-sub">${grandNote}</div></div>
   `;
   todayCard.classList.toggle("today-missed", missed > 0);
 }
@@ -1702,7 +2089,7 @@ function renderDashboard(){
   const fcPct = MONTHS.map((m,i)=> sales[i]? (fcs[i]*100/sales[i]) : 0);
   const invStart = MONTHS.map(m=> monthInvStart(m));
   const invClose = MONTHS.map(m=> monthInvClose(m));
-  const storeYTD = STORES.map(s=>{ let t=0; MONTHS.forEach(m=> t+=storeRowTotal(m,s)); return t; });
+  const storeYTD = effectiveStores().map(s=>{ let t=0; MONTHS.forEach(m=> t+=storeRowTotal(m,s)); return t; });
 
   destroyChart("chartSales"); destroyChart("chartProfit"); destroyChart("chartFCpct"); destroyChart("chartStore"); destroyChart("chartInv"); destroyChart("chartCostMix"); destroyChart("chartDaily");
 
@@ -1758,7 +2145,7 @@ function renderDashboard(){
   });
   charts.chartStore = new Chart(document.getElementById("chartStore"), {
     type:"doughnut",
-    data:{labels:STORES, datasets:[{data:storeYTD, backgroundColor:["#f59e0b","#16a34a","#0ea5e9","#7c2d12","#a855f7"]}]},
+    data:{labels:effectiveStores(), datasets:[{data:storeYTD, backgroundColor:["#f59e0b","#16a34a","#0ea5e9","#7c2d12","#a855f7","#ec4899","#0891b2","#65a30d"]}]},
     options:{responsive:true,maintainAspectRatio:false}
   });
   charts.chartInv = new Chart(document.getElementById("chartInv"), {
@@ -1782,6 +2169,7 @@ function renderDashboard(){
 /*  REFRESH ALL                                                            */
 /* ====================================================================== */
 function refreshAll(){
+  renderUnitSwitcher();
   renderYearSelect();
   renderUserBadge();
   renderGlobalEditBtn();
@@ -1797,6 +2185,7 @@ function refreshAll(){
   renderDaily();
   renderProducts();
   renderIncentive();
+  renderVendorPayout();
   renderMonthlyInput();
   renderYearly();
   renderDashboard();
@@ -1820,13 +2209,47 @@ function renderYearSelect(){
   const years = Object.keys(state.years).map(n=>+n).sort((a,b)=>a-b);
   sel.innerHTML = years.map(y => `<option value="${y}" ${y===state.currentYear?"selected":""}>${y}</option>`).join("");
 }
+// Switch to another unit in-app (admins + users with multi-unit access).
+function switchActiveUnit(id){
+  if (!state.units[id] || id === state.currentUnit) return;
+  const sess = state.auth && state.auth.session;
+  if (!sess){ alert("Not logged in."); return; }
+  if (sess.role !== "admin" && !emailAllowedForUnit(sess.email, id, sess.role)){
+    alert("You're not authorized to access that unit."); return;
+  }
+  bindUnit(id);
+  saveAll();
+  flash(`✓ Switched to ${state.units[id].name}`);
+}
+function renderUnitSwitcher(){
+  const wrap = document.getElementById("unitSwitcherLabel");
+  const sel = document.getElementById("unitSwitcher");
+  if (!sel || !wrap) return;
+  const sess = state.auth && state.auth.session;
+  if (!sess){ wrap.style.display = "none"; return; }
+  // Determine which units this user can switch into
+  const accessible = Object.entries(state.units || {}).filter(([id, u]) => {
+    if (sess.role === "admin") return true;
+    if (id === RC_UNIT_ID) return true;
+    return (u.allowedEmails || []).map(e => (e||"").toLowerCase()).includes(sess.email);
+  });
+  // Only show the switcher when there's more than one to choose from
+  if (accessible.length <= 1){ wrap.style.display = "none"; return; }
+  wrap.style.display = "flex";
+  sel.innerHTML = accessible.map(([id, u]) =>
+    `<option value="${id}" ${id===state.currentUnit?"selected":""}>${(u.name||id).replace(/</g,"&lt;")}</option>`
+  ).join("");
+}
+
 function renderUserBadge(){
   const b = document.getElementById("userBadge");
   if (!b) return;
   if (state.auth && state.auth.session){
     b.style.display = "inline-block";
     const role = state.auth.session.role;
-    b.innerHTML = `👤 <b>${state.auth.session.email}</b> <span style="color:var(--muted)">(${role})</span> · <a href="#" onclick="logout();return false">Logout</a>`;
+    const unit = state.units[state.currentUnit];
+    const unitLabel = unit ? unit.name : "RC";
+    b.innerHTML = `🏢 <b>${unitLabel}</b> · 👤 <b>${state.auth.session.email}</b> <span style="color:var(--muted)">(${role})</span> · <a href="#" onclick="logout();return false">Logout</a>`;
   } else {
     b.style.display = "none";
   }
@@ -1843,6 +2266,74 @@ const STORE_TO_DAILY_UNIT = {
   "TCS":        "tcs",
   "Events":     null
 };
+// True when a Sales/Targets store is hidden because its Daily Sales counterpart was hidden.
+function isSiteHidden(storeName){
+  if (!state.daily || !Array.isArray(state.daily.hiddenStores)) return false;
+  const dailyKey = STORE_TO_DAILY_UNIT[storeName];
+  return !!dailyKey && state.daily.hiddenStores.includes(dailyKey);
+}
+// Inventory uses slightly different site names — map them to the same Daily Sales keys
+// so a single hide-toggle hides them everywhere (Sales, Inventory, Purchase usages, etc.).
+const INV_SITE_TO_DAILY_UNIT = {
+  "Store":         null,     // central storage — no daily counterpart, never auto-hidden
+  "Food Truck":    "truck",
+  "Rolling Express":"rcExpress",
+  "TCS":           "tcs",
+  "Café & Kitchen":"cafe"
+};
+function isInvSiteHidden(siteName){
+  if (!state.daily || !Array.isArray(state.daily.hiddenStores)) return false;
+  const dailyKey = INV_SITE_TO_DAILY_UNIT[siteName];
+  return !!dailyKey && state.daily.hiddenStores.includes(dailyKey);
+}
+function effectiveInvSites(){
+  return INV_SITES.filter(s => !isInvSiteHidden(s));
+}
+// The effective list of stores to render = base STORES + unit's customSites, minus the hidden ones.
+function effectiveStores(){
+  const unit = state.units && state.currentUnit && state.units[state.currentUnit];
+  const custom = (unit && Array.isArray(unit.customSites)) ? unit.customSites : [];
+  const all = STORES.concat(custom.filter(c => !STORES.includes(c)));
+  return all.filter(s => !isSiteHidden(s));
+}
+function addCustomSite(){
+  if (!isManagerRole()){ alert("Only admin / manager can add a site."); return; }
+  const name = prompt("New site name (e.g., New Branch, Catering, Pop-Up):", "");
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed){ alert("Name cannot be blank."); return; }
+  const unit = state.units[state.currentUnit];
+  if (!unit){ alert("No unit context."); return; }
+  if (!Array.isArray(unit.customSites)) unit.customSites = [];
+  if (STORES.includes(trimmed) || unit.customSites.includes(trimmed)){
+    alert(`"${trimmed}" already exists.`); return;
+  }
+  unit.customSites.push(trimmed);
+  // Initialise blank sales / targets data for every month so the new site shows up immediately.
+  MONTHS.forEach(m => {
+    if (state.rc && state.rc.sales && state.rc.sales[m]) state.rc.sales[m][trimmed] = blankSalesRow();
+    if (state.rc && state.rc.tgt   && state.rc.tgt[m])   state.rc.tgt[m][trimmed]   = { target:0, workingDays:30 };
+  });
+  saveAll(true);
+  try { renderSales(); } catch(e){}
+  try { renderTargets && renderTargets(); } catch(e){}
+  flash(`✓ Site "${trimmed}" added — appears in Sales & Targets`);
+}
+function removeCustomSite(name){
+  if (!isManagerRole()){ alert("Only admin / manager can remove a site."); return; }
+  if (!confirm(`Remove the custom site "${name}"?\n\nIts entered Sales & Targets data will be deleted for every month. This cannot be undone.`)) return;
+  const unit = state.units[state.currentUnit];
+  if (!unit || !Array.isArray(unit.customSites)) return;
+  unit.customSites = unit.customSites.filter(c => c !== name);
+  MONTHS.forEach(m => {
+    if (state.rc && state.rc.sales && state.rc.sales[m]) delete state.rc.sales[m][name];
+    if (state.rc && state.rc.tgt   && state.rc.tgt[m])   delete state.rc.tgt[m][name];
+  });
+  saveAll(true);
+  try { renderSales(); } catch(e){}
+  try { renderTargets && renderTargets(); } catch(e){}
+  flash(`✓ Site "${name}" removed`);
+}
 // Sum of daily-unit sales for a given store within a given month, optionally filtered to a cutoff date.
 // "Incremental" — grows as each new daily entry is added.
 function storeAchievedFromDaily(m, s, asOfDate){
@@ -1903,6 +2394,51 @@ function setIncentiveRole(kind, email){
   if (!isAdmin()){ alert("Only an admin can set incentive workflow roles."); return; }
   if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
   state.auth.incentiveRoles[kind] = email || "";
+  saveAll();
+}
+
+/* ====== Franchise Unit Master (admin only) ====== */
+function addFranchiseUnit(){
+  if (!isAdmin()){ alert("Admin only."); return; }
+  const inp = document.getElementById("newUnitName");
+  const name = (inp.value || "").trim();
+  if (!name){ alert("Enter a franchise unit name."); return; }
+  if (Object.values(state.units).some(u => (u.name||"").trim().toLowerCase() === name.toLowerCase())){
+    alert("A unit with this name already exists."); return;
+  }
+  const id = newUnitId();
+  state.units[id] = makeBlankUnit(name, true);
+  inp.value = "";
+  saveAll();
+  flash(`✓ Franchise unit added: ${name}`);
+}
+function renameFranchiseUnit(id){
+  if (!isAdmin()){ return; }
+  if (id === RC_UNIT_ID){ alert("Cannot rename the RC unit."); return; }
+  const u = state.units[id]; if (!u) return;
+  const name = prompt("New name for this franchise unit:", u.name);
+  if (name === null || !name.trim()) return;
+  u.name = name.trim();
+  applyUnitLayout(state.units[state.currentUnit]);
+  saveAll();
+}
+function deleteFranchiseUnit(id){
+  if (!isAdmin()){ return; }
+  if (id === RC_UNIT_ID){ alert("Cannot delete the RC unit."); return; }
+  if (!confirm("Delete franchise unit and ALL its report data? This cannot be undone.")) return;
+  delete state.units[id];
+  if (state.currentUnit === id) bindUnit(RC_UNIT_ID);
+  saveAll();
+  flash("✓ Unit deleted");
+}
+function editUnitEmails(id){
+  if (!isAdmin()){ return; }
+  const u = state.units[id]; if (!u) return;
+  if (id === RC_UNIT_ID){ alert("RC unit is the default — all registered users can access it."); return; }
+  const cur = (u.allowedEmails || []).join(", ");
+  const next = prompt(`Allowed emails for "${u.name}"\nComma-separated. Only these users (plus any admin) can access this unit.`, cur);
+  if (next === null) return;
+  u.allowedEmails = next.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
   saveAll();
 }
 
@@ -2272,6 +2808,720 @@ function shareIncentiveWA(){
   window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
 }
 
+/* ====================================================================== */
+/*  VENDOR PAYOUT                                                          */
+/* ====================================================================== */
+const VP_MODES = ["Cash","Bank Transfer","UPI","Cheque","Other"];
+const VP_STATUSES = ["Pending","Paid","Partial"];
+const VP_CATEGORIES = ["Raw Material","Packaging","Equipment","Services","Rent","Utilities","Other"];
+
+function newVendorId(){ return "v_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
+function newPayoutId(){ return "po_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
+// One-time auto-wipe of all Vendor Payout data so the redesigned workflow starts fresh.
+// Bump VP_RESET_KEY in the future if another forced reset is ever needed.
+function maybeWipeVendorPayouts(){ /* no-op in database-only mode (no localStorage) */ }
+// Manual full reset (admin) — clears every vendor + every payout sheet across all units/years.
+function resetVendorPayoutsManual(){
+  if (!isAdmin()){ alert("Only admin can reset Vendor Payouts."); return; }
+  if (!confirm("Reset ALL Vendor Payout data?\n\nThis deletes:\n• Every vendor in the Vendor Master\n• Every payment sheet across every month/year (history included)\n\nThis cannot be undone.")) return;
+  if (!confirm("Are you sure? Type-equivalent confirmation: this wipes EVERY vendor and EVERY sheet.")) return;
+  if (state.units){
+    Object.values(state.units).forEach(u => {
+      if (u){ u.vendors = []; }
+      if (u && u.years){
+        Object.values(u.years).forEach(y => { if (y) y.vendorPayouts = { approved:{}, sheets:{} }; });
+      }
+    });
+  }
+  saveAll(true);
+  renderVendorPayout();
+  flash("✓ All Vendor Payout data has been reset");
+}
+// ------ Vendor Payout master settings (per state.auth) ------
+function vpSettings(){
+  if (!state.auth) state.auth = {};
+  if (!state.auth.vendorPayout) state.auth.vendorPayout = { approverPhone:"" };
+  return state.auth.vendorPayout;
+}
+function vpApproverPhone(){ return (vpSettings().approverPhone || "").replace(/[^\d]/g, ""); }
+function setVpApproverPhone(){
+  if (!isAdmin() && !isManagerRole()){ alert("Only admin / manager can set the approver phone."); return; }
+  const current = vpSettings().approverPhone || "";
+  const next = prompt(
+    "Approver's WhatsApp number (with country code, digits only — e.g. 919876543210).\n" +
+    "This number will be the default recipient when you tap 💬 WA.\n\nLeave blank to clear.",
+    current
+  );
+  if (next === null) return;            // cancelled
+  vpSettings().approverPhone = next.replace(/[^\d]/g, "");
+  saveAll(true);
+  flash(vpSettings().approverPhone ? `✓ Approver phone saved: ${vpSettings().approverPhone}` : "✓ Approver phone cleared");
+  renderVendorPayout();
+}
+function blankVendor(){ return { id:newVendorId(), name:"", category:"Raw Material", contact:"", phone:"", gstin:"", account:"" }; }
+function blankPayout(){
+  const today = todayLocal();
+  return { id:newPayoutId(), date:today, vendorId:"", amount:0, mode:"Bank Transfer", refNo:"", status:"Pending", remark:"" };
+}
+// Vendors live on the unit (shared across months/years), payouts live per year + month.
+function getVendors(){
+  const unit = state.units[state.currentUnit];
+  if (!unit.vendors) unit.vendors = [];
+  return unit.vendors;
+}
+function ensureVendorYear(){
+  const yd = state.years[state.currentYear];
+  if (!yd.vendorPayouts) yd.vendorPayouts = { approved:{}, sheets:{} };
+  if (!yd.vendorPayouts.sheets)   yd.vendorPayouts.sheets   = {};
+  if (!yd.vendorPayouts.approved) yd.vendorPayouts.approved = {};
+  return yd.vendorPayouts;
+}
+// Sheets per month — multiple numbered sheets allowed (Month-01, Month-02, …)
+function getSheets(m){
+  const vp = ensureVendorYear();
+  if (!vp.sheets[m]) vp.sheets[m] = [];
+  return vp.sheets[m];
+}
+function sheetName(m, num){ return `${m}-${String(num).padStart(2,"0")}`; }
+function getSheetById(m, sheetId){ return getSheets(m).find(s => s.id === sheetId); }
+// Approval is tracked per-sheet (keyed by sheet name like "May-01")
+function isSheetApproved(m, sheet){
+  if (!sheet) return false;
+  return !!ensureVendorYear().approved[sheetName(m, sheet.num)];
+}
+function vendorPayoutCanEdit(m, sheet){
+  if (!sheet) return false;
+  const st = getSheetStatus(sheet);
+  // Only Draft is editable by creator/manager. Anything past that is locked except for admin overrides.
+  if (st !== "draft") return isAdmin();
+  return isCreatorRole() || isIncentiveCreator();
+}
+// Total pending for a single payout row = Previous Pending + Total Due − Total Payment
+function rowPending(e){ return num(e.previousPending) + num(e.totalDue) - num(e.totalPayment); }
+
+// Look up a vendor's "carried" pending — the totalPending of the most recent prior sheet
+// (an earlier sheet in the same month, or the last sheet of an earlier month).
+function carryForwardPending(m, beforeSheetNum, vendorId){
+  if (!vendorId) return 0;
+  // 1) Earlier sheets in the same month
+  const same = getSheets(m).filter(s => s.num < beforeSheetNum).sort((a,b) => b.num - a.num);
+  for (const s of same){
+    const ent = (s.entries||[]).find(e => e.vendorId === vendorId);
+    if (ent) return rowPending(ent);
+  }
+  // 2) Last sheet of an earlier month (this calendar year)
+  const idx = MONTHS.indexOf(m);
+  for (let i = idx - 1; i >= 0; i--){
+    const pm = MONTHS[i];
+    const arr = getSheets(pm);
+    if (!arr.length) continue;
+    const last = arr.slice().sort((a,b) => b.num - a.num)[0];
+    const ent = (last.entries||[]).find(e => e.vendorId === vendorId);
+    if (ent) return rowPending(ent);
+  }
+  return 0;
+}
+
+function addVendor(){
+  if (!isCreatorRole()){ alert("Only creator / manager / admin can add a vendor."); return; }
+  const name = (prompt("Vendor name:") || "").trim();
+  if (!name) return;
+  const v = blankVendor();
+  v.name = name;
+  getVendors().push(v);
+  saveAll();
+  flash(`✓ Vendor added: ${name}`);
+}
+function removeVendor(id){
+  if (!isCreatorRole()){ alert("Not allowed."); return; }
+  const v = getVendors().find(x => x.id === id);
+  if (!v) return;
+  // Refuse if any payout in any month references this vendor
+  const used = Object.values(ensureVendorYear().byMonth).some(arr => arr.some(p => p.vendorId === id));
+  if (used){ alert("Cannot delete — this vendor has payouts logged. Remove the payouts first."); return; }
+  if (!confirm("Delete vendor: " + v.name + "?")) return;
+  const unit = state.units[state.currentUnit];
+  unit.vendors = unit.vendors.filter(x => x.id !== id);
+  saveAll();
+}
+// Create a new numbered sheet for the current month, auto-copying pending vendors from the previous sheet.
+function addPayoutSheet(){
+  try {
+    const monthSel = document.getElementById("vpMonthPicker");
+    const m = (monthSel && monthSel.value) || CURRENT_MONTH;
+    if (!isCreatorRole()){ alert("Only creator / manager / admin can add a sheet."); return; }
+    const sheets = getSheets(m);
+    const num = (sheets.reduce((mx,s) => Math.max(mx, s.num||0), 0)) + 1;
+    const sheet = { id: newPayoutId(), num, name: sheetName(m, num), createdAt: Date.now(), status: "draft", entries: [] };
+    // Auto-copy any vendor with non-zero pending from the previous HISTORY (paid) sheet.
+    const prev = findPrevSheetForCopy(m, num);
+    if (prev){
+      (prev.entries || []).forEach(p => {
+        const pending = rowPending(p);
+        if (pending > 0 && p.vendorId){
+          sheet.entries.push({
+            id: newPayoutId(),
+            vendorId: p.vendorId,
+            previousPending: pending,
+            totalDue: 0,
+            totalPayment: 0,
+            refNo: "",
+            mode: p.mode || "Bank Transfer",
+            status: "Pending",
+            remark: ""
+          });
+        }
+      });
+    }
+    sheets.push(sheet);
+    // Signal the renderer to keep this new sheet selected (renderVendorPayout reads sp.value
+    // BEFORE rebuilding options and preserves it if it matches a sheet).
+    const sp = document.getElementById("vpSheetPicker");
+    if (sp) sp.value = sheet.id;
+    saveAll(true);
+    renderVendorPayout();
+    if (sheet.entries.length){
+      flash(`✓ New ${m} sheet created — ${sheet.entries.length} pending vendor${sheet.entries.length===1?"":"s"} carried forward from previous sheet`);
+    } else if (prev){
+      flash(`✓ New ${m} sheet created — no pending balances to carry forward`);
+    } else {
+      flash(`✓ First ${m} sheet created — start adding rows`);
+    }
+  } catch (err){
+    console.error("addPayoutSheet failed:", err);
+    alert("Could not create sheet: " + (err && err.message ? err.message : err));
+  }
+}
+// Add a row (one vendor) to the currently-selected sheet
+function addPayoutRow(){
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  let sheets = getSheets(m);
+  if (!sheets.length){
+    addPayoutSheet();
+    sheets = getSheets(m);
+  }
+  const sp = document.getElementById("vpSheetPicker");
+  const sheetId = sp ? sp.value : (sheets[0] && sheets[0].id);
+  const sheet = getSheetById(m, sheetId) || sheets[sheets.length-1];
+  if (!sheet) return;
+  if (!vendorPayoutCanEdit(m, sheet)){
+    alert(isSheetApproved(m, sheet) ? "This sheet is approved — only admin/approver can modify." : "Not allowed.");
+    return;
+  }
+  if (!getVendors().length){ alert("Add at least one vendor first (📒 Vendor Master)."); return; }
+  sheet.entries.push({
+    id: newPayoutId(), vendorId: "",
+    previousPending: 0, totalDue: 0, totalPayment: 0,
+    refNo: "", mode: "Bank Transfer", status: "Pending", remark: ""
+  });
+  saveAll();
+}
+function removePayoutRow(id){
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheetId = document.getElementById("vpSheetPicker")?.value;
+  const sheet = getSheetById(m, sheetId);
+  if (!sheet) return;
+  if (!vendorPayoutCanEdit(m, sheet)) return;
+  if (!confirm("Delete this row?")) return;
+  sheet.entries = (sheet.entries||[]).filter(e => e.id !== id);
+  saveAll();
+}
+function removePayoutSheet(){
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheetId = document.getElementById("vpSheetPicker")?.value;
+  const sheet = getSheetById(m, sheetId);
+  if (!sheet) return;
+  if (!isCreatorRole()){ alert("Not allowed."); return; }
+  if (isSheetApproved(m, sheet) && !isIncentiveApprover()){ alert("Sheet is approved — cannot delete."); return; }
+  if (!confirm(`Delete sheet ${sheet.name} and all ${sheet.entries.length} row(s)?`)) return;
+  const vp = ensureVendorYear();
+  vp.sheets[m] = vp.sheets[m].filter(s => s.id !== sheetId);
+  // Remove approval entry too
+  delete vp.approved[sheetName(m, sheet.num)];
+  saveAll();
+}
+// ===== Sheet workflow: draft → creator_approved → manager_approved (payment pending) → paid (history)
+function getSheetStatus(s){ return s && s.status ? s.status : "draft"; }
+const VP_STATUS_META = {
+  draft:               { label: "📝 Draft",               color: "#b45309" },
+  creator_approved:    { label: "👤 Creator approved",    color: "#0ea5e9" },
+  manager_approved:    { label: "💳 Payment Pending",     color: "#7c2d12" },
+  paid:                { label: "✅ Paid (History)",      color: "#16a34a" }
+};
+function toggleCreatorApproval(){
+  if (!isCreatorRole()){ alert("Only creator / manager / admin can do this."); return; }
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheet = getSheetById(m, document.getElementById("vpSheetPicker")?.value);
+  if (!sheet){ alert("No sheet selected."); return; }
+  const st = getSheetStatus(sheet);
+  if (st === "draft"){
+    if (!confirm(`Creator approve the current ${m} payment sheet?\n\nIt then needs the manager's approval.`)) return;
+    sheet.status = "creator_approved";
+    sheet.creatorApprovedBy = currentEmail() || "creator";
+    sheet.creatorApprovedAt = Date.now();
+    flash(`✓ ${m} sheet — creator approved`);
+  } else if (st === "creator_approved"){
+    if (!confirm("Roll back to Draft?")) return;
+    sheet.status = "draft"; sheet.creatorApprovedBy = ""; sheet.creatorApprovedAt = null;
+  } else {
+    alert("Sheet is past the creator-approval stage. Only the next step can undo it.");
+    return;
+  }
+  saveAll();
+}
+function toggleManagerApproval(){
+  if (!isManagerRole()){ alert("Only manager / admin can do this."); return; }
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheet = getSheetById(m, document.getElementById("vpSheetPicker")?.value);
+  if (!sheet){ alert("No sheet selected."); return; }
+  const st = getSheetStatus(sheet);
+  if (st === "creator_approved"){
+    if (!confirm(`Manager approve the current ${m} payment sheet?\n\nIt then moves to Payment Pending — waiting for the creator to mark it paid.`)) return;
+    sheet.status = "manager_approved";
+    sheet.managerApprovedBy = currentEmail() || "manager";
+    sheet.managerApprovedAt = Date.now();
+    flash(`✓ ${m} sheet — payment pending`);
+  } else if (st === "manager_approved"){
+    if (!confirm("Roll back to Creator-Approved?")) return;
+    sheet.status = "creator_approved"; sheet.managerApprovedBy = ""; sheet.managerApprovedAt = null;
+  } else if (st === "draft"){
+    alert("Sheet must be Creator-Approved before Manager can approve it.");
+  } else {
+    alert("Sheet is already paid. An admin must un-mark it first.");
+  }
+  saveAll();
+}
+function markPaymentDone(){
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheet = getSheetById(m, document.getElementById("vpSheetPicker")?.value);
+  if (!sheet){ alert("No sheet selected."); return; }
+  const st = getSheetStatus(sheet);
+  if (st === "paid"){
+    if (!isAdmin()){ alert("Only admin can un-mark a paid sheet."); return; }
+    if (!confirm("Un-mark this paid sheet and return it to Payment Pending?")) return;
+    sheet.status = "manager_approved"; sheet.paidBy = ""; sheet.paidAt = null;
+    saveAll();
+    return;
+  }
+  if (!isCreatorRole()){ alert("Only creator / admin can mark payment done."); return; }
+  if (st !== "manager_approved"){ alert("Sheet must be Manager-Approved (Payment Pending) before marking paid."); return; }
+  if (!confirm(`Mark the current ${m} payment sheet as Payment Done?\n\nThe sheet moves to History.\nA fresh sheet is created with all remaining pending vendors carried forward.`)) return;
+  // Mark the whole sheet paid
+  sheet.status = "paid";
+  sheet.paidBy = currentEmail() || "creator";
+  sheet.paidAt = Date.now();
+  saveAll(true);
+  // Only auto-create the next sheet if there isn't already an active (non-paid) sheet
+  // for this month (handles the rare case where a creator pre-created the next sheet manually).
+  const hasOtherActive = getSheets(m).some(s => s.id !== sheet.id && getSheetStatus(s) !== "paid");
+  if (!hasOtherActive){
+    addPayoutSheet();
+  } else {
+    // Just refresh the picker so the paid sheet disappears.
+    const sp = document.getElementById("vpSheetPicker");
+    if (sp) sp.value = "";
+    renderVendorPayout();
+  }
+  const newSheets = getSheets(m).slice().sort((a,b) => a.num - b.num);
+  const newSheet  = newSheets.filter(s => getSheetStatus(s) !== "paid").slice(-1)[0];
+  if (newSheet){
+    const carried = (newSheet.entries || []).length;
+    flash(`✓ ${m} sheet → History · new sheet ready${carried?` with ${carried} pending vendor${carried===1?"":"s"} carried forward`:" (no pending balances to carry)"}`);
+  } else {
+    flash(`✓ ${m} sheet — marked Paid · moved to History`);
+  }
+}
+// Find the immediately previous sheet (any status) so we can carry pendings forward.
+// In normal flow the previous sheet is already in History (paid); this also handles
+// edge cases where the user creates a new sheet manually before paying the current one.
+function findPrevSheetForCopy(m, beforeNum){
+  const sameMonth = getSheets(m).filter(s => s.num < beforeNum).sort((a,b) => b.num - a.num)[0];
+  if (sameMonth) return sameMonth;
+  const idx = MONTHS.indexOf(m);
+  for (let i = idx - 1; i >= 0; i--){
+    const arr = getSheets(MONTHS[i]);
+    if (arr.length) return arr.slice().sort((a,b) => b.num - a.num)[0];
+  }
+  return null;
+}
+function vpOnMonthChange(){
+  // Reset the sheet picker so the first sheet of the new month is picked
+  const sp = document.getElementById("vpSheetPicker");
+  if (sp) sp.value = "";
+  renderVendorPayout();
+}
+
+function renderVendorPayout(){
+  const sel = document.getElementById("vpMonthPicker");
+  if (!sel) return;
+  sel.innerHTML = MONTHS.map(mm => `<option value="${mm}" ${mm===(sel.value||CURRENT_MONTH)?"selected":""}>${mm} ${state.currentYear}</option>`).join("");
+  const m = sel.value || CURRENT_MONTH;
+  document.getElementById("vpMonthLabel").textContent = `${m} ${state.currentYear}`;
+
+  // ----- Sheet picker (status icon + history filter) -----
+  const showHistory = !!document.getElementById("vpShowHistory")?.checked;
+  const allSheets   = getSheets(m).slice().sort((a,b) => a.num - b.num);
+  const sheets = showHistory ? allSheets : allSheets.filter(s => getSheetStatus(s) !== "paid");
+  const sp = document.getElementById("vpSheetPicker");
+  if (sp){
+    // Capture the caller's intended selection BEFORE we wipe the options.
+    // (Setting innerHTML on a <select> resets .value to the first option, which would
+    //  otherwise stop a newly-created sheet from being auto-selected.)
+    const desiredId = sp.value || "";
+    if (!sheets.length){
+      const allCount = allSheets.length;
+      const hiddenPaid = allCount - sheets.length;
+      if (!showHistory && hiddenPaid > 0){
+        sp.innerHTML = `<option value="">— ${hiddenPaid} sheet${hiddenPaid===1?"":"s"} in History (tick Show History) —</option>`;
+      } else if (showHistory){
+        sp.innerHTML = `<option value="">— no sheets yet —</option>`;
+      } else {
+        sp.innerHTML = `<option value="">— no active sheet — click + New Sheet —</option>`;
+      }
+      sp.value = "";
+    } else {
+      const fmtDate = d => d ? `${d.toLocaleString("default",{month:"short"})} ${d.getDate()}` : "earlier";
+      sp.innerHTML = sheets.map(s => {
+        const st   = getSheetStatus(s);
+        const rows = (s.entries||[]).length;
+        const rowsStr = `${rows} row${rows===1?"":"s"}`;
+        let label;
+        if (st === "paid"){
+          const d = s.paidAt ? new Date(s.paidAt) : null;
+          label = `✅ Paid ${fmtDate(d)} · ${rowsStr}`;
+        } else if (st === "manager_approved"){
+          label = `💳 Payment Pending · ${rowsStr}`;
+        } else if (st === "creator_approved"){
+          label = `👤 Creator Approved · ${rowsStr}`;
+        } else {
+          label = `📝 Current Sheet · ${rowsStr}`;
+        }
+        return `<option value="${s.id}">${label}</option>`;
+      }).join("");
+      // Prefer the caller's selection if it still exists; otherwise default to the LATEST sheet.
+      if (desiredId && sheets.find(s => s.id === desiredId)){
+        sp.value = desiredId;
+      } else {
+        sp.value = sheets[sheets.length-1].id;
+      }
+    }
+  }
+  const sheet = sp && sp.value ? getSheetById(m, sp.value) : (sheets[sheets.length-1] || null);
+  const status = getSheetStatus(sheet);
+  const canEdit = vendorPayoutCanEdit(m, sheet);
+  const dis = canEdit ? "" : "disabled";
+
+  // ----- Status pill -----
+  const stEl = document.getElementById("vpApprovalStatus");
+  if (stEl){
+    if (!sheet){
+      const hint = getSheets(m).length
+        ? `All paid sheets are in History.`
+        : `No sheet yet for ${m} ${state.currentYear}.`;
+      stEl.innerHTML = `<span style="color:var(--muted)">${hint} Click <b>+ New Sheet</b> to start.</span>`;
+    } else {
+      const meta = VP_STATUS_META[status] || VP_STATUS_META.draft;
+      let extra = "";
+      if (status === "creator_approved") extra = ` by ${sheet.creatorApprovedBy||"creator"}`;
+      else if (status === "manager_approved") extra = ` by ${sheet.managerApprovedBy||"manager"}`;
+      else if (status === "paid"){
+        const d = sheet.paidAt ? new Date(sheet.paidAt) : null;
+        const ds = d ? ` ${d.toLocaleString("default",{month:"short"})} ${d.getDate()}` : "";
+        extra = `${ds} by ${sheet.paidBy||"creator"}`;
+      }
+      stEl.innerHTML = `<span style="color:${meta.color};font-weight:700">${meta.label}</span><span style="color:var(--muted)">${extra}</span>`;
+    }
+  }
+
+  // ----- Workflow buttons (visibility depends on status + role) -----
+  function setBtn(id, show, label, kind){
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.style.display = show ? "" : "none";
+    if (show){
+      b.innerHTML = label;
+      b.className = "btn " + (kind || "btn-secondary");
+    }
+  }
+  // Creator-approve button
+  let creatorBtnShow = false, creatorBtnLabel = "", creatorBtnKind = "btn-primary";
+  if (sheet && isCreatorRole()){
+    if (status === "draft"){ creatorBtnShow = true; creatorBtnLabel = "✅ Creator Approve"; }
+    else if (status === "creator_approved"){ creatorBtnShow = true; creatorBtnLabel = "↩ Un-approve (Creator)"; creatorBtnKind = "btn-danger"; }
+  }
+  setBtn("vpCreatorApproveBtn", creatorBtnShow, creatorBtnLabel, creatorBtnKind);
+  // Manager-approve button
+  let mgrBtnShow = false, mgrBtnLabel = "", mgrBtnKind = "btn-primary";
+  if (sheet && isManagerRole()){
+    if (status === "creator_approved"){ mgrBtnShow = true; mgrBtnLabel = "✅ Manager Approve"; }
+    else if (status === "manager_approved"){ mgrBtnShow = true; mgrBtnLabel = "↩ Un-approve (Manager)"; mgrBtnKind = "btn-danger"; }
+  }
+  setBtn("vpManagerApproveBtn", mgrBtnShow, mgrBtnLabel, mgrBtnKind);
+  // Mark Payment Done button
+  let paidBtnShow = false, paidBtnLabel = "", paidBtnKind = "btn-primary";
+  if (sheet){
+    if (status === "manager_approved" && isCreatorRole()){ paidBtnShow = true; paidBtnLabel = "💰 Mark Payment Done"; }
+    else if (status === "paid" && isAdmin()){ paidBtnShow = true; paidBtnLabel = "↩ Un-mark Paid"; paidBtnKind = "btn-danger"; }
+  }
+  setBtn("vpPaidBtn", paidBtnShow, paidBtnLabel, paidBtnKind);
+
+  // + New Sheet: only enabled when there's no active (non-paid) sheet in the month.
+  // This guarantees a single working sheet at a time and avoids parallel-draft confusion.
+  // First sheet of a month → enabled. After Mark Payment Done → enabled again.
+  const monthSheets = getSheets(m);
+  const hasActiveSheet = monthSheets.some(s => getSheetStatus(s) !== "paid");
+  const newBtn = document.getElementById("vpNewSheetBtn");
+  if (newBtn){
+    newBtn.disabled = !isCreatorRole() || hasActiveSheet;
+    newBtn.title = !isCreatorRole()
+      ? "Only creator / manager / admin can start a sheet."
+      : hasActiveSheet
+        ? "Finish the current sheet (Mark Payment Done) before starting a new one."
+        : "Create a new payment sheet — pending balances from the previous sheet will carry forward.";
+  }
+  document.getElementById("vpAddVendorBtn").disabled = !isCreatorRole();
+  document.getElementById("vpAddPayoutBtn").disabled = !canEdit || !sheet;
+  const resetBtn = document.getElementById("vpResetBtn");
+  if (resetBtn) resetBtn.style.display = isAdmin() ? "" : "none";
+  // Approver phone pill — visible for admin/manager so they can set the master number.
+  const phonePill = document.getElementById("vpApproverPhonePill");
+  if (phonePill){
+    if (isAdmin() || isManagerRole()){
+      phonePill.style.display = "";
+      const ph = vpApproverPhone();
+      phonePill.innerHTML = ph
+        ? `📱 Approver: <b>+${ph}</b>`
+        : `📱 Set approver phone…`;
+    } else {
+      phonePill.style.display = "none";
+    }
+  }
+
+  // Adjust header labels — sheet #1 says "Total Due", sheets #2+ say "Total GRN"
+  const hDue = document.getElementById("vpHeadDue");
+  if (hDue) hDue.textContent = sheet && sheet.num > 1 ? "Total GRN ₹" : "Total Due ₹";
+
+  // ===== Vendor Master =====
+  const vendors = getVendors();
+  const vb = document.getElementById("vpVendorBody");
+  if (!vendors.length){
+    vb.innerHTML = `<tr><td colspan="7" class="small" style="text-align:center;color:var(--muted);padding:14px">No vendors yet. Click <b>+ Add Vendor</b>.</td></tr>`;
+  } else {
+    const canVendor = isCreatorRole();
+    const vDis = canVendor ? "" : "disabled";
+    vb.innerHTML = vendors.map(v => `<tr>
+      <td><input type="text" value="${(v.name||'').replace(/"/g,'&quot;')}" data-vid="${v.id}" data-vf="name" ${vDis} style="width:140px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><select data-vid="${v.id}" data-vf="category" ${vDis} style="padding:4px;font-size:11.5px">${VP_CATEGORIES.map(c=>`<option ${c===v.category?"selected":""}>${c}</option>`).join("")}</select></td>
+      <td><input type="text" value="${(v.contact||'').replace(/"/g,'&quot;')}" data-vid="${v.id}" data-vf="contact" ${vDis} style="width:110px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(v.phone||'').replace(/"/g,'&quot;')}" data-vid="${v.id}" data-vf="phone" ${vDis} style="width:110px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(v.gstin||'').replace(/"/g,'&quot;')}" data-vid="${v.id}" data-vf="gstin" ${vDis} style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(v.account||'').replace(/"/g,'&quot;')}" data-vid="${v.id}" data-vf="account" ${vDis} style="width:150px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td>${canVendor ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeVendor('${v.id}')">🗑️</button>` : ''}</td>
+    </tr>`).join("");
+    vb.querySelectorAll("input,select").forEach(inp => {
+      const evt = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(evt, e => {
+        const v = vendors.find(x => x.id === e.target.dataset.vid);
+        if (v) v[e.target.dataset.vf] = e.target.value;
+        saveAll(true);
+      });
+    });
+  }
+
+  // ===== Payouts table (for selected sheet) =====
+  const pb = document.getElementById("vpPayoutBody");
+  const vendorOpts = (vid) => `<option value="">— pick vendor —</option>` + vendors.map(v => `<option value="${v.id}" ${v.id===vid?"selected":""}>${(v.name||"(unnamed)").replace(/</g,"&lt;")}</option>`).join("");
+  if (!sheet){
+    pb.innerHTML = `<tr><td colspan="9" class="small" style="text-align:center;color:var(--muted);padding:14px">No sheet for ${m}. Click <b>+ New Sheet</b> to create the first one.</td></tr>`;
+    document.getElementById("vpTotalRow").innerHTML = "";
+    return;
+  }
+  const entries = sheet.entries || [];
+  if (!entries.length){
+    pb.innerHTML = `<tr><td colspan="9" class="small" style="text-align:center;color:var(--muted);padding:14px">This sheet has no rows. Click <b>+ Add Row</b>.</td></tr>`;
+    document.getElementById("vpTotalRow").innerHTML = "";
+    return;
+  }
+
+  let totDue = 0, totPrev = 0, totPay = 0, totPending = 0;
+  pb.innerHTML = entries.map(e => {
+    // Auto-fill previousPending if user picked a vendor and field is still blank/0
+    const cf = carryForwardPending(m, sheet.num, e.vendorId);
+    if (e.vendorId && (e.previousPending === undefined || e.previousPending === "" || +e.previousPending === 0) && cf){
+      e.previousPending = cf;  // pre-fill (user can still edit)
+    }
+    const pend = rowPending(e);
+    totDue += num(e.totalDue); totPrev += num(e.previousPending);
+    totPay += num(e.totalPayment); totPending += pend;
+    return `<tr>
+      <td><select data-eid="${e.id}" data-ef="vendorId" ${dis} style="padding:4px;font-size:12px;min-width:150px">${vendorOpts(e.vendorId)}</select></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${e.previousPending}" data-eid="${e.id}" data-ef="previousPending" ${dis} title="Carries forward from prior sheet — editable"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${e.totalDue}" data-eid="${e.id}" data-ef="totalDue" ${dis} title="${sheet.num>1?'New goods received (GRN)':'Opening due for this vendor'}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${e.totalPayment}" data-eid="${e.id}" data-ef="totalPayment" ${dis}/></td>
+      <td class="derived-cell"><b>${fmt0(pend)}</b></td>
+      <td><select data-eid="${e.id}" data-ef="mode" ${dis} style="padding:4px;font-size:12px">${VP_MODES.map(x=>`<option ${x===e.mode?"selected":""}>${x}</option>`).join("")}</select></td>
+      <td><input type="text" value="${(e.refNo||'').replace(/"/g,'&quot;')}" data-eid="${e.id}" data-ef="refNo" ${dis} style="width:110px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(e.remark||'').replace(/"/g,'&quot;')}" data-eid="${e.id}" data-ef="remark" ${dis} style="width:120px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td>${canEdit ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removePayoutRow('${e.id}')">🗑️</button>` : ''}</td>
+    </tr>`;
+  }).join("");
+  pb.querySelectorAll("input,select").forEach(inp => {
+    const evt = (inp.tagName === "SELECT") ? "change" : "input";
+    inp.addEventListener(evt, ev => {
+      const r = entries.find(x => x.id === ev.target.dataset.eid);
+      if (!r) return;
+      const f = ev.target.dataset.ef;
+      if (f === "vendorId"){
+        r.vendorId = ev.target.value;
+        // Auto-fill previousPending fresh from carry-forward
+        r.previousPending = carryForwardPending(m, sheet.num, r.vendorId);
+      } else if (f === "previousPending" || f === "totalDue" || f === "totalPayment") {
+        r[f] = num(ev.target.value);
+      } else {
+        r[f] = ev.target.value;
+      }
+      saveAll(true);
+    });
+  });
+  document.getElementById("vpTotalRow").innerHTML = `
+    <td><b>TOTAL — ${entries.length} row${entries.length===1?"":"s"}</b></td>
+    <td><b>${fmt(totPrev)}</b></td>
+    <td><b>${fmt(totDue)}</b></td>
+    <td><b>${fmt(totPay)}</b></td>
+    <td><b>${fmt(totPending)}</b></td>
+    <td colspan="4" class="small">New Payable: ${fmt(totPrev + totDue)}  ·  Paid: ${fmt(totPay)}  ·  Outstanding: ${fmt(totPending)}</td>`;
+}
+
+function exportVendorPayoutExcel(){
+  if (typeof XLSX === "undefined"){ alert("Excel library still loading — try again."); return; }
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const vendors = getVendors();
+  const vmap = {}; vendors.forEach(v => vmap[v.id] = v.name);
+  const sheets = getSheets(m).slice().sort((a,b) => a.num - b.num);
+  const wb = XLSX.utils.book_new();
+  const tabLabel = (s) => {
+    const st = getSheetStatus(s);
+    if (st === "paid"){
+      const d = s.paidAt ? new Date(s.paidAt) : null;
+      return d ? `Paid ${d.toLocaleString("default",{month:"short"})}-${d.getDate()}` : "Paid";
+    }
+    if (st === "manager_approved") return "Payment Pending";
+    if (st === "creator_approved") return "Creator Approved";
+    return "Current";
+  };
+  // One Excel sheet per payout sheet
+  let seen = {};
+  sheets.forEach(s => {
+    const header = ["Vendor", s.num > 1 ? "Previous Pending (₹)" : "Previous Due (₹)",
+                    s.num > 1 ? "Total GRN (₹)" : "Total Due (₹)",
+                    "Total Payment (₹)","Total Pending (₹)","Mode","Ref/Invoice","Remark"];
+    let tabName = tabLabel(s);
+    if (seen[tabName] !== undefined){ seen[tabName]++; tabName = `${tabName} (${seen[tabName]})`; } else { seen[tabName] = 0; }
+    const aoa = [
+      [`${tabName} — ${state.units[state.currentUnit].name} · ${m} ${state.currentYear}`],
+      [],
+      header
+    ];
+    let tPrev=0, tDue=0, tPay=0, tPend=0;
+    (s.entries||[]).forEach(e => {
+      const pend = rowPending(e);
+      tPrev += num(e.previousPending); tDue += num(e.totalDue);
+      tPay += num(e.totalPayment); tPend += pend;
+      aoa.push([vmap[e.vendorId] || "(no vendor)", num(e.previousPending), num(e.totalDue),
+                num(e.totalPayment), pend, e.mode, e.refNo, e.remark]);
+    });
+    aoa.push([]);
+    aoa.push(["TOTAL", tPrev, tDue, tPay, tPend]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), tabName.slice(0,31));
+  });
+  // Vendor master sheet
+  const vhdr = ["Vendor Name","Category","Contact","Phone","GSTIN","Bank/UPI"];
+  const vaoa = [vhdr];
+  vendors.forEach(v => vaoa.push([v.name, v.category, v.contact, v.phone, v.gstin, v.account]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vaoa), "Vendor Master");
+  XLSX.writeFile(wb, `RC_VendorPayouts_${m}_${state.currentYear}.xlsx`);
+  flash("✓ Excel downloaded");
+}
+function shareVendorPayoutWA(){
+  const m = document.getElementById("vpMonthPicker").value || CURRENT_MONTH;
+  const sheetId = document.getElementById("vpSheetPicker")?.value;
+  const sheet = getSheetById(m, sheetId);
+  if (!sheet){ alert("No sheet to share."); return; }
+  const vendors = getVendors();
+  const vmap = {}; vendors.forEach(v => vmap[v.id] = v);
+  exportVendorPayoutExcel();
+
+  // Column widths (kept tight so the table fits a phone screen inside a monospace block).
+  // Columns: Sl | Cat | Vendor | Prev | Due | Pay | Pend
+  const SLW=2, CW=6, VW=10, AW=7;
+  const padR = (s,n) => { s = String(s); return s.slice(0,n) + " ".repeat(Math.max(0, n - s.length)); };
+  const padL = (s,n) => { s = String(s); return " ".repeat(Math.max(0, n - s.length)) + s.slice(0,n); };
+  const ROW = (sl, cat, name, prev, due, pay, pend) =>
+    padR(sl, SLW) + " " + padR(cat, CW) + " " + padR(name, VW) + " " +
+    padL(prev, AW) + " " + padL(due, AW) + " " + padL(pay, AW) + " " + padL(pend, AW);
+  const SEP = "-".repeat(SLW + CW + VW + AW*4 + 6);
+
+  // Status-based title (no sheet number)
+  const wst = getSheetStatus(sheet);
+  let stLine = "📝 Current Sheet";
+  if (wst === "paid"){
+    const d = sheet.paidAt ? new Date(sheet.paidAt) : null;
+    stLine = d ? `✅ Paid ${d.toLocaleString("default",{month:"short"})} ${d.getDate()}` : "✅ Paid";
+  } else if (wst === "manager_approved") stLine = "💳 Payment Pending";
+  else if (wst === "creator_approved") stLine = "👤 Creator Approved";
+  let txt = `*💸 Vendor Payout — ${m} ${state.currentYear}*\n`;
+  txt += `_${state.units[state.currentUnit].name}_  ·  *${stLine}*\n`;
+  txt += "\n```\n";
+  txt += ROW("Sl", "Cat",  "Vendor", "Prev",  "Due", "Pay", "Pend") + "\n";
+  txt += SEP + "\n";
+
+  let totPrev=0, totDue=0, totPay=0, totPend=0, sl=1;
+  (sheet.entries || []).forEach(e => {
+    const v    = vmap[e.vendorId] || {};
+    const cat  = (v.category || "—").slice(0, CW);
+    const name = (v.name || "?").slice(0, VW);
+    const prev = num(e.previousPending);
+    const due  = num(e.totalDue);
+    const pay  = num(e.totalPayment);
+    const pend = rowPending(e);
+    totPrev += prev; totDue += due; totPay += pay; totPend += pend;
+    txt += ROW(String(sl).padStart(2,"0"), cat, name, fmt0(prev), fmt0(due), fmt0(pay), fmt0(pend)) + "\n";
+    sl++;
+  });
+  txt += SEP + "\n";
+  txt += ROW("", "", "TOTAL", fmt0(totPrev), fmt0(totDue), fmt0(totPay), fmt0(totPend)) + "\n";
+  txt += "```\n\n";
+
+  // Highlighted sub-totals
+  txt += `*Sub-Total — Previous Pending:* ${fmt(totPrev)}\n`;
+  txt += `*Sub-Total — Total Payment:* ${fmt(totPay)}\n`;
+  txt += `*Sub-Total — Total Pending:* ${fmt(totPend)}\n`;
+  txt += `\n_The Excel file has been downloaded — attach it in WhatsApp to send the full sheet._`;
+
+  // Default recipient = the master approver phone.
+  // Prompt if not yet set, so the user can add it on the spot.
+  let phone = vpApproverPhone();
+  if (!phone){
+    const entered = prompt(
+      "No approver WhatsApp number is saved yet.\n" +
+      "Enter it now (digits only, with country code — e.g. 919876543210), or leave blank to just open WhatsApp and pick a contact.",
+      ""
+    );
+    if (entered === null) return;  // cancelled
+    const clean = (entered || "").replace(/[^\d]/g, "");
+    if (clean){
+      vpSettings().approverPhone = clean;
+      saveAll(true);
+      phone = clean;
+      renderVendorPayout();
+    }
+  }
+  const url = phone
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(txt)}`
+    : `https://wa.me/?text=${encodeURIComponent(txt)}`;
+  window.open(url, "_blank");
+}
+
 /* ===== Product Consumption (site-wise per spreadsheet structure) ===== */
 function newProductId(){ return "p_" + Date.now() + "_" + Math.floor(Math.random()*1000); }
 function ensureProductMonth(m){
@@ -2440,10 +3690,11 @@ function yearTotals(year){
     }
     // Purchase (Purchase-node value)
     const purchase = (yd.rc && yd.rc.pur) ? num(yd.rc.pur[m]) : 0;
-    // Food Cost (Actual FC formula)
+    // Food Cost (Actual FC formula) — respect hidden sites so the user's "doesn't take part
+    // in any calculation" rule cascades into FC as well.
     let invStart = 0, invClose = 0;
     if (yd.rc && yd.rc.inv && yd.rc.inv[m]){
-      INV_SITES.forEach(site => {
+      effectiveInvSites().forEach(site => {
         const x = yd.rc.inv[m][site];
         if (x){ invStart += num(x.start); invClose += num(x.close); }
       });
@@ -2470,8 +3721,20 @@ function dailyEntryTotals(e){
   const t = num(e.truck.upi)+num(e.truck.cash);
   const tc = num(e.tcs.t1)+num(e.tcs.t2);
   const f = num(e.rcf.upi)+num(e.rcf.cash);
-  // "All Total" matches your spreadsheet: Café + RC Express + Truck + TCS (RCF tracked separately)
-  return { cafe:c, rcExpress:r, truck:t, tcs:tc, rcf:f, all:c+r+t+tc, grand:c+r+t+tc+f };
+  // Respect the per-unit "Hide store" toggles from Daily Sales so that
+  // sub-totals, Avg/Day, Dashboard KPIs, charts, and WA share all stay in sync
+  // with the visible columns. allRaw/grandRaw remain for any caller that needs
+  // the absolute figure (none currently).
+  const hidden = (state.daily && Array.isArray(state.daily.hiddenStores))
+                  ? state.daily.hiddenStores : [];
+  const inAll = k => !hidden.includes(k);
+  const allMain  = (inAll("cafe")?c:0) + (inAll("rcExpress")?r:0) + (inAll("truck")?t:0) + (inAll("tcs")?tc:0);
+  const grand    = allMain + (inAll("rcf")?f:0);
+  return {
+    cafe:c, rcExpress:r, truck:t, tcs:tc, rcf:f,
+    all: allMain, grand,
+    allRaw: c+r+t+tc, grandRaw: c+r+t+tc+f
+  };
 }
 function dayName(dateStr){
   if (!dateStr) return "";
@@ -2531,6 +3794,9 @@ function toggleEditMode(){
 function renderDaily(){
   const d = state.daily;
   if (!d) return;
+  if (!Array.isArray(d.hiddenStores)) d.hiddenStores = [];
+  const STORE_KEYS = ["cafe","rcExpress","truck","tcs","rcf"];
+  const isHidden = k => d.hiddenStores.includes(k);
   const today = todayLocal();
 
   // Auto-add today's row if we're viewing the current calendar year and no entry exists for today.
@@ -2551,6 +3817,32 @@ function renderDaily(){
     tgtInp.value = d.perDayTarget;
     tgtInp.oninput = e => { d.perDayTarget = num(e.target.value); saveAll(true); };
   }
+
+  // Apply CSS hide-classes to the table so the static thead columns disappear.
+  const tbl = document.getElementById("dailyTable");
+  if (tbl){
+    STORE_KEYS.forEach(k => tbl.classList.toggle("hide-" + k, isHidden(k)));
+  }
+  // Sync the hide-store checkboxes with state
+  document.querySelectorAll('#dailyHideStoresWrap input[type="checkbox"][data-hs]').forEach(cb => {
+    cb.checked = isHidden(cb.dataset.hs);
+    if (!cb._wired){
+      cb._wired = true;
+      cb.addEventListener("change", () => {
+        const key = cb.dataset.hs;
+        d.hiddenStores = d.hiddenStores.filter(x => x !== key);
+        if (cb.checked) d.hiddenStores.push(key);
+        saveAll(true);
+        renderDaily();
+        // Cascade to every other node that lists stores so Sales / Inventory / Targets /
+        // Dashboard immediately reflect the new hidden set.
+        try { renderSales();     } catch(e){}
+        try { renderInventory && renderInventory(); } catch(e){}
+        try { renderTargets && renderTargets(); } catch(e){}
+        try { renderDashboard && renderDashboard(); } catch(e){}
+      });
+    }
+  });
 
   // Edit-mode button label + banner
   const btn = document.getElementById("editModeBtn");
@@ -2578,13 +3870,22 @@ function renderDaily(){
   let sAll=0;
   d.entries.forEach((e, idx) => {
     const t = dailyEntryTotals(e);
-    sCafeU+=num(e.cafe.upi); sCafeO+=num(e.cafe.online); sCafeC+=num(e.cafe.cash); sCafeT+=t.cafe;
-    sRcU+=num(e.rcExpress.upi); sRcC+=num(e.rcExpress.cash); sRcT+=t.rcExpress;
-    sTrU+=num(e.truck.upi); sTrC+=num(e.truck.cash); sTrT+=t.truck;
-    sT1+=num(e.tcs.t1); sT2+=num(e.tcs.t2); sTcsT+=t.tcs;
-    sRcfU+=num(e.rcf.upi); sRcfC+=num(e.rcf.cash); sRcfT+=t.rcf;
-    sAll+=t.all;
-    const delta = t.all - num(d.perDayTarget);
+    // Sum only the visible stores so sub-totals/avg reflect the active set.
+    // (Cafe/RcExpress/Truck/TCS are part of "All Total"; RCF is tracked separately
+    //  in the existing schema, so leave it out of the daily "All Total" — but still
+    //  exclude its column if hidden.)
+    if (!isHidden("cafe")){ sCafeU+=num(e.cafe.upi); sCafeO+=num(e.cafe.online); sCafeC+=num(e.cafe.cash); sCafeT+=t.cafe; }
+    if (!isHidden("rcExpress")){ sRcU+=num(e.rcExpress.upi); sRcC+=num(e.rcExpress.cash); sRcT+=t.rcExpress; }
+    if (!isHidden("truck")){ sTrU+=num(e.truck.upi); sTrC+=num(e.truck.cash); sTrT+=t.truck; }
+    if (!isHidden("tcs")){ sT1+=num(e.tcs.t1); sT2+=num(e.tcs.t2); sTcsT+=t.tcs; }
+    if (!isHidden("rcf")){ sRcfU+=num(e.rcf.upi); sRcfC+=num(e.rcf.cash); sRcfT+=t.rcf; }
+    // Per-row "All Total" excludes any hidden store.
+    const rowAll = (isHidden("cafe")?0:t.cafe)
+                 + (isHidden("rcExpress")?0:t.rcExpress)
+                 + (isHidden("truck")?0:t.truck)
+                 + (isHidden("tcs")?0:t.tcs);
+    sAll += rowAll;
+    const delta = rowAll - num(d.perDayTarget);
     const cls = delta>=0 ? "badge-good" : "badge-bad";
     const locked = !!e.locked;
     const dis = locked ? "disabled" : "";
@@ -2608,27 +3909,27 @@ function renderDaily(){
                    <button class="btn btn-danger" style="padding:3px 7px;font-size:11px;margin-left:4px" onclick="deleteDailyRow(${idx})" title="Delete this day">×</button>`;
     }
     html += `<tr class="${rowClass}">
-      <td><input type="date" data-idx="${idx}" data-f="date" value="${e.date||""}" style="padding:5px;font-size:12px" ${dis}/></td>
+      <td class="col-date"><input type="date" data-idx="${idx}" data-f="date" value="${e.date||""}" style="padding:5px;font-size:12px" ${dis}/></td>
       <td><b>${dayName(e.date)}</b>${locked ? ' <span class="lock-badge" title="Locked">🔒</span>' : ''}</td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="upi" value="${e.cafe.upi}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="online" value="${e.cafe.online}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="cash" value="${e.cafe.cash}" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(t.cafe)}</b></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="upi" value="${e.rcExpress.upi}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="cash" value="${e.rcExpress.cash}" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(t.rcExpress)}</b></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="upi" value="${e.truck.upi}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="cash" value="${e.truck.cash}" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(t.truck)}</b></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t1" value="${e.tcs.t1}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t2" value="${e.tcs.t2}" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(t.tcs)}</b></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="upi" value="${e.rcf.upi}" ${dis}/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="cash" value="${e.rcf.cash}" ${dis}/></td>
-      <td class="derived-cell"><b>${fmt0(t.rcf)}</b></td>
-      <td class="derived-cell"><b>${fmt(t.all)}</b></td>
+      <td data-store="cafe"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="upi" value="${e.cafe.upi}" ${dis}/></td>
+      <td data-store="cafe"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="online" value="${e.cafe.online}" ${dis}/></td>
+      <td data-store="cafe"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="cafe" data-f="cash" value="${e.cafe.cash}" ${dis}/></td>
+      <td data-store="cafe" class="derived-cell"><b>${fmt0(t.cafe)}</b></td>
+      <td data-store="rcExpress"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="upi" value="${e.rcExpress.upi}" ${dis}/></td>
+      <td data-store="rcExpress"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcExpress" data-f="cash" value="${e.rcExpress.cash}" ${dis}/></td>
+      <td data-store="rcExpress" class="derived-cell"><b>${fmt0(t.rcExpress)}</b></td>
+      <td data-store="truck"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="upi" value="${e.truck.upi}" ${dis}/></td>
+      <td data-store="truck"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="truck" data-f="cash" value="${e.truck.cash}" ${dis}/></td>
+      <td data-store="truck" class="derived-cell"><b>${fmt0(t.truck)}</b></td>
+      <td data-store="tcs"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t1" value="${e.tcs.t1}" ${dis}/></td>
+      <td data-store="tcs"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="tcs" data-f="t2" value="${e.tcs.t2}" ${dis}/></td>
+      <td data-store="tcs" class="derived-cell"><b>${fmt0(t.tcs)}</b></td>
+      <td data-store="rcf"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="upi" value="${e.rcf.upi}" ${dis}/></td>
+      <td data-store="rcf"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="cash" value="${e.rcf.cash}" ${dis}/></td>
+      <td data-store="rcf" class="derived-cell"><b>${fmt0(t.rcf)}</b></td>
+      <td class="derived-cell"><b>${fmt(rowAll)}</b></td>
       <td class="${cls}"><b>${delta>=0?"+":""}${fmt0(delta)}</b></td>
-      <td>${actionBtn}</td>
+      <td class="col-act">${actionBtn}</td>
     </tr>`;
   });
   tbody.innerHTML = html;
@@ -2643,25 +3944,25 @@ function renderDaily(){
       saveAll(true);
     });
   });
-  // Sub-total row
+  // Sub-total row (each store's cells carry data-store so they hide with the column)
   document.getElementById("dailySubTotalRow").innerHTML = `
     <td><b>Sub-total</b></td><td></td>
-    <td>${fmt0(sCafeU)}</td><td>${fmt0(sCafeO)}</td><td>${fmt0(sCafeC)}</td><td><b>${fmt(sCafeT)}</b></td>
-    <td>${fmt0(sRcU)}</td><td>${fmt0(sRcC)}</td><td><b>${fmt(sRcT)}</b></td>
-    <td>${fmt0(sTrU)}</td><td>${fmt0(sTrC)}</td><td><b>${fmt(sTrT)}</b></td>
-    <td>${fmt0(sT1)}</td><td>${fmt0(sT2)}</td><td><b>${fmt(sTcsT)}</b></td>
-    <td>${fmt0(sRcfU)}</td><td>${fmt0(sRcfC)}</td><td><b>${fmt(sRcfT)}</b></td>
+    <td data-store="cafe">${fmt0(sCafeU)}</td><td data-store="cafe">${fmt0(sCafeO)}</td><td data-store="cafe">${fmt0(sCafeC)}</td><td data-store="cafe"><b>${fmt(sCafeT)}</b></td>
+    <td data-store="rcExpress">${fmt0(sRcU)}</td><td data-store="rcExpress">${fmt0(sRcC)}</td><td data-store="rcExpress"><b>${fmt(sRcT)}</b></td>
+    <td data-store="truck">${fmt0(sTrU)}</td><td data-store="truck">${fmt0(sTrC)}</td><td data-store="truck"><b>${fmt(sTrT)}</b></td>
+    <td data-store="tcs">${fmt0(sT1)}</td><td data-store="tcs">${fmt0(sT2)}</td><td data-store="tcs"><b>${fmt(sTcsT)}</b></td>
+    <td data-store="rcf">${fmt0(sRcfU)}</td><td data-store="rcf">${fmt0(sRcfC)}</td><td data-store="rcf"><b>${fmt(sRcfT)}</b></td>
     <td><b>${fmt(sAll)}</b></td>
     <td colspan="2" class="small">Target/day: ${fmt(d.perDayTarget)}</td>`;
   // Avg row
   const n = d.entries.length || 1;
   document.getElementById("dailyAvgRow").innerHTML = `
     <td><b>Avg / Day</b></td><td class="small">${d.entries.length} day${d.entries.length===1?"":"s"}</td>
-    <td>${fmt0(sCafeU/n)}</td><td>${fmt0(sCafeO/n)}</td><td>${fmt0(sCafeC/n)}</td><td>${fmt(sCafeT/n)}</td>
-    <td>${fmt0(sRcU/n)}</td><td>${fmt0(sRcC/n)}</td><td>${fmt(sRcT/n)}</td>
-    <td>${fmt0(sTrU/n)}</td><td>${fmt0(sTrC/n)}</td><td>${fmt(sTrT/n)}</td>
-    <td>${fmt0(sT1/n)}</td><td>${fmt0(sT2/n)}</td><td>${fmt(sTcsT/n)}</td>
-    <td>${fmt0(sRcfU/n)}</td><td>${fmt0(sRcfC/n)}</td><td>${fmt(sRcfT/n)}</td>
+    <td data-store="cafe">${fmt0(sCafeU/n)}</td><td data-store="cafe">${fmt0(sCafeO/n)}</td><td data-store="cafe">${fmt0(sCafeC/n)}</td><td data-store="cafe">${fmt(sCafeT/n)}</td>
+    <td data-store="rcExpress">${fmt0(sRcU/n)}</td><td data-store="rcExpress">${fmt0(sRcC/n)}</td><td data-store="rcExpress">${fmt(sRcT/n)}</td>
+    <td data-store="truck">${fmt0(sTrU/n)}</td><td data-store="truck">${fmt0(sTrC/n)}</td><td data-store="truck">${fmt(sTrT/n)}</td>
+    <td data-store="tcs">${fmt0(sT1/n)}</td><td data-store="tcs">${fmt0(sT2/n)}</td><td data-store="tcs">${fmt(sTcsT/n)}</td>
+    <td data-store="rcf">${fmt0(sRcfU/n)}</td><td data-store="rcf">${fmt0(sRcfC/n)}</td><td data-store="rcf">${fmt(sRcfT/n)}</td>
     <td><b>${fmt(sAll/n)}</b></td>
     <td colspan="2"></td>`;
   const info = document.getElementById("dailyCountInfo");
@@ -2686,7 +3987,7 @@ document.querySelectorAll(".tab").forEach(t=>{
 /*  EXPORT / IMPORT                                                        */
 /* ====================================================================== */
 function exportJSON(){
-  const blob = new Blob([JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode, auth:state.auth}, null, 2)], {type:"application/json"});
+  const blob = new Blob([JSON.stringify({currentUnit:state.currentUnit, units:state.units, currentYear:state.currentYear, editMode:state.editMode, auth:state.auth}, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = `RC_Monthly_Report_${state.year}.json`; a.click();
@@ -2698,8 +3999,11 @@ function importJSON(ev){
   const r = new FileReader();
   r.onload = e => {
     try {
-      const parsed = JSON.parse(e.target.result);
-      if (parsed && (parsed.years || parsed.rc)) {
+      let parsed = JSON.parse(e.target.result);
+      // Accept the OLD store format (either wrapped as {store:...} or raw) by translating it.
+      if (parsed && parsed.store) { parsed = __RCADAPT.storeToUnits(parsed.store); }
+      else if (parsed && !parsed.units && !parsed.years && !parsed.rc && (parsed.daily || parsed.sales || parsed.inv)) { parsed = __RCADAPT.storeToUnits(parsed); }
+      if (parsed && (parsed.units || parsed.years || parsed.rc)) {
         ingestParsed(parsed);
         saveAll(); flash("✓ Data imported");
       } else { alert("Invalid JSON file."); }
@@ -2720,20 +4024,91 @@ function resetData(){
 /* ====================================================================== */
 function buildSummaryText(m){
   const r = monthRow(m);
-  let txt = `*🥨 Rolling Crunchys — ${m} ${state.year} Report*\n\n`;
-  txt += `*Sales by Store:*\n`;
-  STORES.forEach(s=>{ const v = storeRowTotal(m,s); if (v>0) txt += `• ${s}: ${fmt(v)}\n`; });
-  txt += `\n*Monthly Input:*\n`;
-  txt += `• Sales: ${fmt(r.sales)}\n`;
-  txt += `• Purchase: ${fmt(r.purchase)}\n`;
-  txt += `• Food Cost: ${fmt(r.fc)}  (FC %: ${pct(r.fc,r.sales)})\n`;
-  txt += `• Staff Food: ${fmt(r.sf)}\n`;
-  txt += `• Dump/Wastage: ${fmt(r.dump)}\n`;
-  txt += `• Maintenance: ${fmt(r.mt)}\n`;
-  if (r.oi) txt += `• Other Income: ${fmt(r.oi)}\n`;
-  txt += `• *Net Profit (Est.): ${fmt(r.np)}*  (NP %: ${pct(r.np,r.sales)})\n`;
+  // Tabular helpers — WhatsApp renders triple-backtick blocks in monospaced font,
+  // which lets columns line up perfectly on phone screens.
+  const NW = 13, AW = 13;
+  const padR = (s,n)=> { s=String(s); return s + " ".repeat(Math.max(0,n-s.length)); };
+  const padL = (s,n)=> { s=String(s); return " ".repeat(Math.max(0,n-s.length)) + s; };
+  const cell = v => typeof v === "number" ? fmt0(v) : String(v);
+  const row  = (label, val) => padR(label, NW) + padL(cell(val), AW);
+  const sep  = "-".repeat(NW + AW);
+  const MONO = "```";
 
-  // Product Consumption (site-wise totals + deviation per product, for the selected month)
+  let txt = `*🥨 Rolling Crunchys — ${m} ${state.year} Report*\n\n`;
+
+  // ----- Previous day (last closed day) — unit-wise from the Daily Sales tab -----
+  if (state.daily && state.daily.entries && state.daily.entries.length){
+    const today = todayLocal();
+    let last = null;
+    state.daily.entries.forEach(e => {
+      if (e.date && e.date < today){
+        if (!last || e.date > last.date) last = e;
+      }
+    });
+    if (last){
+      const t = dailyEntryTotals(last);
+      const hidden = (state.daily && state.daily.hiddenStores) || [];
+      const visible = (key) => !hidden.includes(key);
+      let pretty = last.date;
+      try { pretty = new Date(last.date + "T00:00:00").toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short" }); } catch(e){}
+      txt += `*Previous Day — ${pretty}*\n`;
+      txt += MONO + "\n";
+      txt += row("Unit", "Amount ₹") + "\n" + sep + "\n";
+      if (visible("cafe"))      txt += row("Café",       t.cafe)      + "\n";
+      if (visible("rcExpress")) txt += row("RC Express", t.rcExpress) + "\n";
+      if (visible("truck"))     txt += row("Truck",      t.truck)     + "\n";
+      if (visible("tcs"))       txt += row("TCS",        t.tcs)       + "\n";
+      if (visible("rcf"))       txt += row("RCF",        t.rcf)       + "\n";
+      txt += sep + "\n";
+      // Total = sum of VISIBLE main-set stores (Café + RC Express + Truck + TCS),
+      // matching the sheet behaviour (RCF tracked separately).
+      const visibleTotal = (visible("cafe")?t.cafe:0)
+                         + (visible("rcExpress")?t.rcExpress:0)
+                         + (visible("truck")?t.truck:0)
+                         + (visible("tcs")?t.tcs:0);
+      txt += row("Total*",     visibleTotal)       + "\n";
+      const tgt = num(state.daily.perDayTarget);
+      if (tgt > 0){
+        const diff = visibleTotal - tgt;
+        txt += row("Target",   tgt) + "\n";
+        txt += row("Gap " + (diff>=0?"+":"-"), Math.abs(diff)) + "  " + (diff>=0?"🟢":"🔴") + "\n";
+      }
+      const hiddenLabels = hidden.map(k => ({cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"TCS",rcf:"RCF"})[k]).filter(Boolean);
+      const note = hiddenLabels.length
+        ? `_*excludes ${hiddenLabels.join(", ")} — hidden by user_`
+        : `_*excl. RCF — matches sheet_`;
+      txt += MONO + "\n" + note + "\n\n";
+    }
+  }
+
+  // ----- Sales by Store (respects hide-site toggle + includes custom sites) -----
+  let storeTotal = 0;
+  const storeRows = [];
+  effectiveStores().forEach(s=>{ const v = storeRowTotal(m,s); if (v>0){ storeRows.push([s,v]); storeTotal += v; } });
+  if (storeRows.length){
+    txt += `*Sales by Store — ${m}*\n` + MONO + "\n";
+    txt += row("Store", "Amount ₹") + "\n" + sep + "\n";
+    storeRows.forEach(([s,v]) => { txt += row(s, v) + "\n"; });
+    txt += sep + "\n" + row("Total", storeTotal) + "\n" + MONO + "\n\n";
+  }
+
+  // ----- Monthly Input -----
+  txt += `*Monthly Input — ${m}*\n` + MONO + "\n";
+  txt += row("Item", "Amount ₹") + "\n" + sep + "\n";
+  txt += row("Sales",       r.sales)    + "\n";
+  txt += row("Purchase",    r.purchase) + "\n";
+  txt += row("Food Cost",   r.fc)       + "\n";
+  txt += row("Staff Food",  r.sf)       + "\n";
+  txt += row("Dump/Waste",  r.dump)     + "\n";
+  txt += row("Maintenance", r.mt)       + "\n";
+  if (r.oi) txt += row("Other Inc.", r.oi) + "\n";
+  txt += sep + "\n";
+  txt += row("Net Profit", r.np) + "\n";
+  txt += row("FC %",  (r.sales? (r.fc*100/r.sales).toFixed(2) : "0") + "%") + "\n";
+  txt += row("NP %",  (r.sales? (r.np*100/r.sales).toFixed(2) : "0") + "%") + "\n";
+  txt += MONO + "\n\n";
+
+  // ----- Product Consumption -----
   const yd = state.years[state.currentYear];
   if (yd && yd.products && yd.products.length && yd.consumption && yd.consumption[m]){
     const rows = yd.products.map(p => {
@@ -2741,33 +4116,39 @@ function buildSummaryText(m){
       if (!rec || rec.sites === undefined) return null;
       return {
         name: p.name, unit: p.unit || "kg",
-        total:    consumptionTotalSites(rec),
-        purchase: num(rec.purchase),
-        wastage:  num(rec.wastage),
-        staff:    num(rec.staffFood),
-        deviation: consumptionDeviation(rec),
-        devPct:    consumptionDeviationPct(rec),
-        red:       consumptionIsRed(rec)
+        total: consumptionTotalSites(rec), purchase: num(rec.purchase),
+        deviation: consumptionDeviation(rec), devPct: consumptionDeviationPct(rec),
+        red: consumptionIsRed(rec)
       };
     }).filter(x => x && (x.total > 0 || x.purchase > 0));
     if (rows.length){
-      txt += `\n*Product Consumption (${m}):*\n`;
+      const PNW = 11, PCW = 6, PDW = 8;
+      const pcRow = (n, used, dev, flag) => padR(n, PNW) + padL(used, PCW) + padL(dev, PDW) + (flag||"");
+      const pcSep = "-".repeat(PNW + PCW + PDW);
+      txt += `*Product Consumption — ${m}*\n` + MONO + "\n";
+      txt += pcRow("Item", "Used", "Dev") + "\n" + pcSep + "\n";
       rows.forEach(p => {
-        const flag = p.red ? " 🔴" : "";
-        txt += `• ${p.name}: Used ${fmt0(p.total)} ${p.unit} · Purchase ${fmt0(p.purchase)} · Waste ${fmt0(p.wastage)} · Staff ${fmt0(p.staff)} · Dev ${fmt0(p.deviation)} ${p.unit} (${p.devPct.toFixed(2)}%)${flag}\n`;
+        txt += pcRow(p.name, fmt0(p.total) + " " + p.unit.slice(0,2), fmt0(p.deviation) + " " + p.unit.slice(0,2), p.red?" 🔴":"") + "\n";
       });
+      txt += MONO + "\n";
       const flagged = rows.filter(p => p.red).length;
-      if (flagged) txt += `_🔴 ${flagged} product${flagged===1?"":"s"} flagged: deviation > ${DEVIATION_THRESHOLD} kg_\n`;
+      if (flagged) txt += `_🔴 ${flagged} item${flagged===1?"":"s"} flagged: deviation > ${DEVIATION_THRESHOLD} kg_\n`;
+      txt += "\n";
     }
   }
 
-  // YTD
+  // ----- YTD -----
   let yS=0, yNP=0, yFC=0;
   MONTHS.forEach(mm=>{ const x=monthRow(mm); yS+=x.sales; yNP+=x.np; yFC+=x.fc; });
-  txt += `\n*Year-to-Date ${state.year}:*\n`;
-  txt += `• YTD Sales: ${fmt(yS)}\n`;
-  txt += `• YTD Food Cost: ${fmt(yFC)} (${pct(yFC,yS)})\n`;
-  txt += `• YTD Net Profit: ${fmt(yNP)} (${pct(yNP,yS)})\n`;
+  txt += `*Year-to-Date ${state.year}*\n` + MONO + "\n";
+  txt += row("Metric", "Amount ₹") + "\n" + sep + "\n";
+  txt += row("Sales",      yS)  + "\n";
+  txt += row("Food Cost",  yFC) + "\n";
+  txt += row("FC %",       (yS? (yFC*100/yS).toFixed(2) : "0") + "%") + "\n";
+  txt += row("Net Profit", yNP) + "\n";
+  txt += row("NP %",       (yS? (yNP*100/yS).toFixed(2) : "0") + "%") + "\n";
+  txt += MONO + "\n";
+
   txt += `\n_Generated from RC Monthly Report Dashboard_`;
   return txt;
 }
@@ -2792,7 +4173,7 @@ function copyText(){
 }
 function shareWhatsAppLink(){
   // Share link doesn't include auth — recipient should not get other users' password hashes
-  const json = JSON.stringify({currentYear:state.currentYear, years:state.years, editMode:state.editMode});
+  const json = JSON.stringify({currentUnit:state.currentUnit, units:state.units, currentYear:state.currentYear, editMode:state.editMode});
   const compressed = LZString.compressToEncodedURIComponent(json);
   const baseURL = location.href.split("#")[0];
   const link = baseURL + "#d=" + compressed;
@@ -2821,7 +4202,28 @@ async function hashStr(s){
 }
 function showLogin(){
   document.getElementById("loginOverlay").classList.remove("hidden");
-  setTimeout(()=> document.getElementById("loginEmail")?.focus(), 50);
+  // Clear every field so the login screen is a fresh slate (e.g. after logout).
+  const emailEl = document.getElementById("loginEmail");
+  const pwEl    = document.getElementById("loginPassword");
+  const pw2El   = document.getElementById("loginPasswordConfirm");
+  const confirmLabel = document.getElementById("passwordConfirmLabel");
+  if (emailEl) emailEl.value = "";
+  if (pwEl)    pwEl.value    = "";
+  if (pw2El)   pw2El.value   = "";
+  if (confirmLabel) confirmLabel.style.display = "none";
+  loginMsg("", null);
+  const sub = document.getElementById("loginSub");
+  if (sub) sub.textContent = "Sign in to access the monthly report";
+  // Populate the Franchise Unit dropdown — always reset to RC as default.
+  const sel = document.getElementById("loginUnit");
+  if (sel){
+    const opts = Object.entries(state.units || {})
+      .map(([id, u]) => `<option value="${id}" ${id===RC_UNIT_ID?"selected":""}>${(u.name||id).replace(/</g,"&lt;")}${id===RC_UNIT_ID?" — default":""}</option>`)
+      .join("");
+    sel.innerHTML = opts || `<option value="${RC_UNIT_ID}">RC (Rolling Crunchys)</option>`;
+    sel.value = RC_UNIT_ID;
+  }
+  setTimeout(()=> emailEl?.focus(), 50);
 }
 function hideLogin(){
   document.getElementById("loginOverlay").classList.add("hidden");
@@ -2831,13 +4233,28 @@ function loginMsg(text, kind){
   if (!text){ el.innerHTML = ""; return; }
   el.innerHTML = `<div class="login-msg ${kind||"info"}">${text}</div>`;
 }
+// Is this email allowed to access the given unit?
+//   - RC unit allows everyone (default)
+//   - Franchise units only the emails in their allowedEmails list
+//   - Admin role bypasses the check
+function emailAllowedForUnit(email, unitId, role){
+  if (role === "admin") return true;
+  if (unitId === RC_UNIT_ID) return true;
+  const u = state.units[unitId];
+  if (!u) return false;
+  const list = (u.allowedEmails || []).map(x => (x||"").trim().toLowerCase());
+  return list.includes(email);
+}
+
 async function handleLoginSubmit(){
   const email = document.getElementById("loginEmail").value.trim().toLowerCase();
   const pw = document.getElementById("loginPassword").value;
   const pw2 = document.getElementById("loginPasswordConfirm").value;
   const confirmShown = document.getElementById("passwordConfirmLabel").style.display !== "none";
+  const chosenUnit = (document.getElementById("loginUnit")?.value) || RC_UNIT_ID;
 
   if (!email || !pw){ loginMsg("Enter both email and password.","err"); return; }
+  if (!state.units[chosenUnit]){ loginMsg("Invalid unit selected.","err"); return; }
 
   const noUsers = Object.keys(state.auth.users).length === 0;
   const existing = state.auth.users[email];
@@ -2855,6 +4272,7 @@ async function handleLoginSubmit(){
     const h = await hashStr(pw);
     state.auth.users[email] = { passwordHash: h, role: "admin", createdAt: Date.now() };
     state.auth.session = { email, role: "admin", since: Date.now() };
+    bindUnit(chosenUnit);  // admin can pick any unit
     saveAll();
     hideLogin();
     refreshAll();
@@ -2865,7 +4283,12 @@ async function handleLoginSubmit(){
   if (existing){
     const h = await hashStr(pw);
     if (h === existing.passwordHash){
+      if (!emailAllowedForUnit(email, chosenUnit, existing.role)){
+        loginMsg("You're not authorized to access the selected franchise unit. Contact an admin.","err");
+        return;
+      }
       state.auth.session = { email, role: existing.role, since: Date.now() };
+      bindUnit(chosenUnit);
       saveAll();
       hideLogin();
       refreshAll();
@@ -2888,6 +4311,12 @@ async function handleLoginSubmit(){
     state.auth.users[email] = { passwordHash: h, role: "user", createdAt: Date.now() };
     state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
     state.auth.session = { email, role: "user", since: Date.now() };
+    if (!emailAllowedForUnit(email, chosenUnit, "user")){
+      loginMsg("You're registered, but not authorized for this unit. Pick a unit you're listed in.","err");
+      state.auth.session = null;
+      return;
+    }
+    bindUnit(chosenUnit);
     saveAll();
     hideLogin();
     refreshAll();
@@ -2896,23 +4325,51 @@ async function handleLoginSubmit(){
 
   loginMsg("This email is not authorized. Contact an admin to add it.","err");
 }
-function logout(){
+async function logout(){
   if (!confirm("Log out?")) return;
-  state.auth.session = null;
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch(e){}
+  topRedirectLogin();
+}
+
+// Self-service password reset — only for emails that ALREADY have an account.
+// (Not a route for brand-new users — they must be invited or created by admin first.)
+async function forgotPassword(){
+  const emailEl = document.getElementById("loginEmail");
+  const email = (emailEl?.value || "").trim().toLowerCase();
+  if (!email){
+    loginMsg("Type your email in the field above first, then click <b>Forgot password</b>.","err");
+    emailEl?.focus();
+    return;
+  }
+  if (!state.auth || !state.auth.users || !state.auth.users[email]){
+    loginMsg("No account found for this email. Ask an admin to create your account first.","err");
+    return;
+  }
+  const np = prompt("Reset password for " + email + "\n\nEnter your NEW password (minimum 4 characters):");
+  if (np === null) return;          // cancelled
+  if (np.length < 4){ loginMsg("Password must be at least 4 characters.","err"); return; }
+  const np2 = prompt("Re-enter the new password to confirm:");
+  if (np2 === null) return;
+  if (np !== np2){ loginMsg("Passwords don't match. Try again.","err"); return; }
+  const h = await hashStr(np);
+  state.auth.users[email].passwordHash = h;
   saveAll();
-  showLogin();
+  loginMsg("✓ Password reset for <b>" + email + "</b>. Enter it above to log in.","ok");
+  const pwEl = document.getElementById("loginPassword");
+  if (pwEl){ pwEl.value = ""; pwEl.focus(); }
 }
 function isAdmin(){ return state.auth.session && state.auth.session.role === "admin"; }
-function addAuthorizedEmail(){
+async function addAuthorizedEmail(){
   if (!isAdmin()){ alert("Admin only"); return; }
   const inp = document.getElementById("authNewEmail");
   const e = inp.value.trim().toLowerCase();
   if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ alert("Enter a valid email"); return; }
-  if (state.auth.users[e]){ alert("Already a registered user"); return; }
-  if (state.auth.authorizedEmails.includes(e)){ alert("Already authorized"); return; }
-  state.auth.authorizedEmails.push(e);
+  const r = await fetch('/api/auth/authorized', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: e }) });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok){ alert(j.error || ('Failed (HTTP ' + r.status + ')')); return; }
   inp.value = "";
-  saveAll();
+  flash("✓ Authorized: " + e);
+  await refreshAuthCache();
 }
 async function createUser(){
   if (!isAdmin()){ alert("Admin only — only admins can create users"); return; }
@@ -2924,54 +4381,49 @@ async function createUser(){
   const role  = ["admin","manager","creator","user"].includes(roleEl.value) ? roleEl.value : "user";
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert("Enter a valid email"); emailEl.focus(); return; }
   if (!pw || pw.length < 4){ alert("Password must be at least 4 characters"); pwEl.focus(); return; }
-  if (state.auth.users[email]){ alert("A user with this email already exists. Use Reset PW or Remove instead."); return; }
-  const passwordHash = await hashStr(pw);
-  state.auth.users[email] = { passwordHash, role, createdAt: Date.now() };
-  // If the email was on the pending list, remove it (account is created now)
-  state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
-  emailEl.value = "";
-  pwEl.value = "";
-  roleEl.value = "user";
+  const r = await fetch('/api/auth/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password: pw, role }) });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok){ alert(j.error || ('Failed (HTTP ' + r.status + ')')); return; }
+  emailEl.value = ""; pwEl.value = ""; roleEl.value = "user";
   flash(`✓ User created: ${email} (${role})`);
-  saveAll();
+  await refreshAuthCache();
 }
-function removeAuthorized(email){
+async function removeAuthorized(email){
   if (!isAdmin()) return;
   if (!confirm("Remove "+email+" from authorized list?")) return;
-  state.auth.authorizedEmails = state.auth.authorizedEmails.filter(e => e !== email);
-  saveAll();
+  const r = await fetch('/api/auth/authorized?email=' + encodeURIComponent(email), { method:'DELETE' });
+  if (!r.ok){ const j = await r.json().catch(()=>({})); alert(j.error || 'Failed'); return; }
+  await refreshAuthCache();
 }
 async function resetUserPassword(email){
   if (!isAdmin()) return;
-  const np = prompt("Set a new password for " + email + ":");
+  const np = prompt("Set a new password for " + email + " (min 4 characters):");
   if (!np) return;
-  state.auth.users[email].passwordHash = await hashStr(np);
+  if (np.length < 4){ alert("Password must be at least 4 characters"); return; }
+  const r = await fetch('/api/auth/users', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password: np }) });
+  if (!r.ok){ const j = await r.json().catch(()=>({})); alert(j.error || 'Failed'); return; }
   alert("Password reset. Tell the user the new password.");
-  saveAll();
 }
-function removeUser(email){
+async function removeUser(email){
   if (!isAdmin()){ alert("Admin only — only admins can delete users"); return; }
-  if (email === state.auth.session.email){ alert("You can't delete your own account."); return; }
-  // Prevent deleting the last admin
-  const admins = Object.entries(state.auth.users).filter(([,u]) => u.role === "admin");
-  if (admins.length === 1 && admins[0][0] === email){
-    alert("Cannot delete the only admin account. Promote another user to admin first.");
-    return;
-  }
+  if (email === currentEmail()){ alert("You can't delete your own account."); return; }
   if (!confirm("Permanently delete user " + email + "?\n\nThis cannot be undone.")) return;
-  delete state.auth.users[email];
-  saveAll();
+  const r = await fetch('/api/auth/users?email=' + encodeURIComponent(email), { method:'DELETE' });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok){ alert(j.error || 'Failed'); return; }
   flash(`✓ Deleted: ${email}`);
+  await refreshAuthCache();
 }
-function promoteUser(email){
+async function promoteUser(email){
   if (!isAdmin()) return;
-  const cur = state.auth.users[email].role || "user";
+  const cur = (state.auth.users[email] && state.auth.users[email].role) || "user";
   const next = prompt("Set role for " + email + " — one of: admin, manager, creator, user", cur);
   if (next === null) return;
-  const r = (next || "").trim().toLowerCase();
-  if (!["admin","manager","creator","user"].includes(r)){ alert("Invalid role. Use: admin, manager, creator, or user."); return; }
-  state.auth.users[email].role = r;
-  saveAll();
+  const r2 = (next || "").trim().toLowerCase();
+  if (!["admin","manager","creator","user"].includes(r2)){ alert("Invalid role. Use: admin, manager, creator, or user."); return; }
+  const resp = await fetch('/api/auth/users', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, role: r2 }) });
+  if (!resp.ok){ const j = await resp.json().catch(()=>({})); alert(j.error || 'Failed'); return; }
+  await refreshAuthCache();
 }
 function renderAuthPanel(){
   // Show/hide tab based on admin role
@@ -2986,6 +4438,29 @@ function renderAuthPanel(){
     ? state.auth.authorizedEmails.map(e =>
         `<tr><td>${e}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeAuthorized('${e}')">Remove</button></td></tr>`).join("")
     : `<tr><td colspan="2" class="small" style="text-align:center;color:var(--muted)">No pending invitations</td></tr>`;
+  // Franchise Unit Master table
+  const ub = document.getElementById("unitMasterBody");
+  if (ub){
+    const rows = Object.entries(state.units || {}).map(([id, u]) => {
+      const typeBadge = u.isFranchise
+        ? `<span style="background:#fef3c7;color:#7c2d12;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">Franchise</span>`
+        : `<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700">RC (default)</span>`;
+      const emails = (u.allowedEmails || []).join(", ") || `<span class="small" style="color:var(--muted)">${id===RC_UNIT_ID?"all users (default)":"— none set —"}</span>`;
+      const actions = id === RC_UNIT_ID
+        ? `<span class="small" style="color:var(--muted)">RC default — not editable</span>`
+        : `<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="renameFranchiseUnit('${id}')">✎ Rename</button>
+           <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;margin-left:4px" onclick="editUnitEmails('${id}')">📧 Emails</button>
+           <button class="btn btn-danger" style="padding:4px 9px;font-size:11px;margin-left:4px" onclick="deleteFranchiseUnit('${id}')">🗑️ Delete</button>`;
+      return `<tr>
+        <td><b>${(u.name||id).replace(/</g,"&lt;")}</b>${id===state.currentUnit?' <span class="small" style="color:var(--good)">(current)</span>':""}</td>
+        <td>${typeBadge}</td>
+        <td class="small">${emails}</td>
+        <td style="text-align:right;white-space:nowrap">${actions}</td>
+      </tr>`;
+    }).join("");
+    ub.innerHTML = rows || `<tr><td colspan="4" class="small" style="text-align:center;color:var(--muted)">No units</td></tr>`;
+  }
+
   // Incentive workflow role dropdowns
   const ir = incentiveRolesObj();
   const emails = Object.keys(state.auth.users);
@@ -3032,156 +4507,51 @@ function renderAuthPanel(){
 /* ====================================================================== */
 /*  INIT                                                                   */
 /* ====================================================================== */
-loadState();
-if (!state.auth.session) showLogin();
-else { hideLogin(); refreshAll(); }
-// Submit on Enter in the login form
-document.getElementById("loginForm")?.addEventListener("submit", e => { e.preventDefault(); handleLoginSubmit(); });
-window.addEventListener("hashchange", ()=>{ loadState(); if (state.auth.session){ hideLogin(); refreshAll(); } else { showLogin(); } });
-</script>
-<!-- ============== SERVER-MODE OVERRIDE (Next.js + Neon) ============== -->
-<style>#loginOverlay{display:none !important;}</style>
-<script>
-(function(){
-  function patch(){
-    if (typeof state === "undefined" || typeof saveAll !== "function") return setTimeout(patch, 50);
-    const origIngest = typeof ingestParsed === "function" ? ingestParsed : null;
+/* ====================================================================== */
+/*  SERVER-MODE BOOTSTRAP  (database only — no localStorage, no seed data)  */
+/* ====================================================================== */
+function topRedirectLogin(){ try { (window.top || window).location.href = '/login'; } catch(e){ window.location.href = '/login'; } }
 
-    window.loadState = async function(){
-      try {
-        const r = await fetch("/api/data", { credentials: "same-origin" });
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const j = await r.json();
-        const data = j.data || {};
-        if (origIngest) origIngest(data);
-        if (!state.auth) state.auth = { users:{}, authorizedEmails:[], session:null };
-        // incentiveRoles live in the shared data blob (auth tables are separate on the server)
-        if (data.incentiveRoles) state.auth.incentiveRoles = data.incentiveRoles;
-        if (!state.auth.incentiveRoles) state.auth.incentiveRoles = { approver:"", creator:"" };
-      } catch(e){ console.warn("loadState failed", e); }
-    };
-    let saveTimer = null;
-    window.saveAll = function(silent){
-      if (typeof refreshAll === "function") {
-        const snap = typeof snapshotFocus === "function" ? snapshotFocus() : null;
-        if (saveTimer) clearTimeout(saveTimer);
-        saveTimer = setTimeout(async () => {
-          try {
-            const body = {
-              currentYear: state.currentYear,
-              years: state.years,
-              editMode: state.editMode,
-              incentiveRoles: (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" }
-            };
-            const r = await fetch("/api/data", { method: "PUT", credentials: "same-origin",
-              headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: body }) });
-            if (!r.ok) console.warn("save failed", r.status);
-            else if (!silent && typeof flash === "function") flash("✓ Saved to server");
-          } catch (e) {
-            console.warn("save error", e);
-            if (typeof flash === "function") flash("✗ Save error");
-          }
-        }, 250);
-        refreshAll();
-        if (snap && typeof restoreFocus === "function") restoreFocus(snap);
-      }
-    };
-    window.createUser = async function(){
-      const emailEl = document.getElementById("createUserEmail");
-      const pwEl    = document.getElementById("createUserPassword");
-      const roleEl  = document.getElementById("createUserRole");
-      const email = emailEl.value.trim().toLowerCase();
-      const password = pwEl.value;
-      const role = ["admin","manager","creator","user"].includes(roleEl.value) ? roleEl.value : "user";
-      if (!email || !password) { alert("Email and password required"); return; }
-      const r = await fetch("/api/auth/users", { method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, role }) });
-      const j = await r.json();
-      if (!r.ok) { alert(j.error || "Failed"); return; }
-      emailEl.value = ""; pwEl.value = ""; roleEl.value = "user";
-      flash("✓ User created: " + email);
-      await reloadAuthLists();
-    };
-    window.removeUser = async function(email){
-      if (!confirm("Delete user " + email + "?")) return;
-      const r = await fetch("/api/auth/users?email=" + encodeURIComponent(email), { method: "DELETE", credentials: "same-origin" });
-      const j = await r.json();
-      if (!r.ok) { alert(j.error || "Failed"); return; }
-      flash("✓ Deleted: " + email);
-      await reloadAuthLists();
-    };
-    window.resetUserPassword = async function(email){
-      const np = prompt("New password for " + email + ":");
-      if (!np || np.length < 4) return;
-      const r = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: np }) });
-      if (r.ok) flash("✓ Password reset for " + email); else alert("Failed");
-    };
-    window.promoteUser = async function(email){
-      const cur = (state.auth && state.auth.users && state.auth.users[email] && state.auth.users[email].role) || "user";
-      const next = prompt("Set role for " + email + " — one of: admin, manager, creator, user", cur);
-      if (next === null) return;
-      const r = (next || "").trim().toLowerCase();
-      if (!["admin","manager","creator","user"].includes(r)){ alert("Invalid role."); return; }
-      const resp = await fetch("/api/auth/users", { method: "PATCH", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role: r }) });
-      if (resp.ok) { flash("✓ Role updated"); await reloadAuthLists(); }
-    };
-    window.addAuthorizedEmail = async function(){
-      const inp = document.getElementById("authNewEmail");
-      const email = inp.value.trim().toLowerCase();
-      if (!email) return;
-      const r = await fetch("/api/auth/authorized", { method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
-      const j = await r.json();
-      if (!r.ok) { alert(j.error || "Failed"); return; }
-      inp.value = "";
-      flash("✓ Email authorized: " + email);
-      await reloadAuthLists();
-    };
-    window.removeAuthorized = async function(email){
-      if (!confirm("Remove " + email + " from authorized list?")) return;
-      const r = await fetch("/api/auth/authorized?email=" + encodeURIComponent(email), { method: "DELETE", credentials: "same-origin" });
-      if (r.ok) { flash("✓ Removed"); await reloadAuthLists(); }
-    };
-    window.logout = async function(){
-      if (!confirm("Log out?")) return;
-      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
-      location.href = "/login";
-    };
-    async function reloadAuthLists(){
-      if (!state.auth) state.auth = { users: {}, authorizedEmails: [], session: state.auth?.session };
-      try {
-        const u = await fetch("/api/auth/users", { credentials: "same-origin" });
-        if (u.ok) {
-          const j = await u.json();
-          state.auth.users = {};
-          (j.users || []).forEach(x => {
-            state.auth.users[x.email] = { passwordHash: "(server)", role: x.role, createdAt: new Date(x.createdAt).getTime() };
-          });
-        }
-        const a = await fetch("/api/auth/authorized", { credentials: "same-origin" });
-        if (a.ok) { const j = await a.json(); state.auth.authorizedEmails = j.emails || []; }
-      } catch(e){}
-      if (typeof renderAuthPanel === "function") renderAuthPanel();
+// Pull the real user list + pending invites from the server so the Authorize
+// tab renders live data (admins only — the endpoints are admin-gated).
+async function refreshAuthCache(){
+  if (!isAdmin()){ renderAuthPanel(); return; }
+  try {
+    const [ur, ar] = await Promise.all([
+      fetch('/api/auth/users', { cache:'no-store' }),
+      fetch('/api/auth/authorized', { cache:'no-store' })
+    ]);
+    if (ur.ok){
+      const j = await ur.json();
+      const map = {};
+      (j.users || []).forEach(u => { map[u.email] = { role: u.role, createdAt: u.createdAt ? new Date(u.createdAt).getTime() : Date.now() }; });
+      state.auth.users = map;
     }
-    (async function(){
-      try {
-        const me = await fetch("/api/auth/me", { credentials: "same-origin" });
-        const meJson = await me.json();
-        if (!meJson.user) { location.href = "/login"; return; }
-        state.auth = state.auth || { users: {}, authorizedEmails: [] };
-        state.auth.session = { email: meJson.user.email, role: meJson.user.role, since: Date.now() };
-        await loadState();
-        if (typeof hideLogin === "function") hideLogin();
-        if (typeof refreshAll === "function") refreshAll();
-        if (state.auth.session.role === "admin") await reloadAuthLists();
-      } catch(e){ console.error("init error", e); }
-    })();
-  }
-  patch();
-})();
-</script>
+    if (ar.ok){ const j = await ar.json(); state.auth.authorizedEmails = j.emails || []; }
+  } catch(e){ console.error('auth cache failed', e); }
+  renderAuthPanel();
+}
 
+// Flush a pending debounced save immediately when the page is being hidden/closed.
+function flushSave(){ if (_saveTimer){ clearTimeout(_saveTimer); _saveTimer = null; _persistData(); } }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', flushSave);
+window.addEventListener('beforeunload', flushSave);
+
+async function boot(){
+  // 1) Confirm the session (the parent app gates access, but we need the role here).
+  let me = null;
+  try { const r = await fetch('/api/auth/me', { cache:'no-store' }); if (r.ok){ const j = await r.json(); me = j.user; } } catch(e){}
+  if (!me){ topRedirectLogin(); return; }
+  state.auth.session = { email: me.email, role: me.role, since: Date.now() };
+  // 2) Load all shared data from the database.
+  await loadState();
+  // 3) Render. (The in-report login overlay is never used in server mode.)
+  hideLogin();
+  refreshAll();
+  refreshAuthCache();
+}
+boot();
+</script>
 </body>
 </html>
