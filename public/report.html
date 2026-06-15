@@ -402,6 +402,9 @@
         <label class="small">Per-Day Target ₹:
           <input type="text" inputmode="decimal" class="numinput" id="dailyTargetInput" style="width:120px"/>
         </label>
+        <label class="small">Month:
+          <select id="dailyMonthSel" onchange="onDailyMonthChange()" style="padding:5px 8px;font-weight:700;font-family:inherit"></select>
+        </label>
         <button class="btn btn-primary" onclick="addDailyRow()">+ Add Day</button>
         <button class="btn btn-secondary" id="editModeBtn" onclick="toggleEditMode()" title="Unlock past saved entries to edit them"></button>
         <span id="dailyHideStoresWrap" class="small" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px;border:1px dashed var(--line);border-radius:4px">
@@ -3748,23 +3751,25 @@ function ymdLocal(d){
 }
 function todayLocal(){ return ymdLocal(new Date()); }
 function addDailyRow(){
-  // Date rules:
-  //   - If there are existing entries, add next day after the last one
-  //   - Else if viewing the current calendar year, use today's local date
-  //   - Else (viewing past/future year) start at Jan 1 of that year
-  let d;
-  if (state.daily.entries.length){
-    const last = state.daily.entries[state.daily.entries.length-1].date;
-    const [yy, mm, dd] = last.split("-").map(n => +n);
-    d = new Date(yy, mm-1, dd);
-    d.setDate(d.getDate()+1);
-  } else if (state.currentYear === CURRENT_YEAR){
-    d = new Date();
+  // Add a day INTO the currently selected month (DAILY_VIEW_MONTH / current year).
+  const yr = state.currentYear, m = DAILY_VIEW_MONTH;
+  const today = todayLocal();
+  const ty = +today.split("-")[0], tm = +today.split("-")[1];
+  const inMonth = state.daily.entries.filter(e => e.date && +e.date.split("-")[0]===yr && +e.date.split("-")[1]===m);
+  let iso;
+  if (yr===ty && m===tm && !inMonth.some(e=>e.date===today)){
+    iso = today;                                   // current month -> today's date
+  } else if (inMonth.length){
+    const maxd = inMonth.map(e=>e.date).sort().pop();
+    const [yy,mm,dd] = maxd.split("-").map(n=>+n);
+    const nd = new Date(yy, mm-1, dd); nd.setDate(nd.getDate()+1);
+    iso = (nd.getMonth()+1 === m)
+        ? ymdLocal(nd)
+        : ymdLocal(new Date(yr, m-1, new Date(yr, m, 0).getDate())); // clamp to last day of month
   } else {
-    d = new Date(state.currentYear, 0, 1);
+    iso = ymdLocal(new Date(yr, m-1, 1));          // empty month -> day 1
   }
-  const iso = ymdLocal(d);
-  state.daily.entries.push(blankDailyEntry(iso));
+  if (!state.daily.entries.some(e => e.date===iso)) state.daily.entries.push(blankDailyEntry(iso));
   saveAll();
 }
 function deleteDailyRow(idx){
@@ -3791,9 +3796,21 @@ function toggleEditMode(){
   }
   saveAll();
 }
+let DAILY_VIEW_MONTH = (new Date()).getMonth()+1;
+function populateDailyMonthSel(){
+  const sel=document.getElementById("dailyMonthSel"); if(!sel) return;
+  if(!sel.options.length){ sel.innerHTML=MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join(""); }
+  sel.value=String(DAILY_VIEW_MONTH);
+}
+function onDailyMonthChange(){
+  const sel=document.getElementById("dailyMonthSel");
+  DAILY_VIEW_MONTH=+(sel&&sel.value)||(new Date().getMonth()+1);
+  renderDaily();
+}
 function renderDaily(){
   const d = state.daily;
   if (!d) return;
+  populateDailyMonthSel();
   if (!Array.isArray(d.hiddenStores)) d.hiddenStores = [];
   const STORE_KEYS = ["cafe","rcExpress","truck","tcs","rcf"];
   const isHidden = k => d.hiddenStores.includes(k);
@@ -3801,7 +3818,8 @@ function renderDaily(){
 
   // Auto-add today's row if we're viewing the current calendar year and no entry exists for today.
   // This way the user always sees today's row ready to fill on landing — no need to click + Add Day.
-  if (state.currentYear === CURRENT_YEAR){
+  const _todayM = +today.split("-")[1];
+  if (state.currentYear === CURRENT_YEAR && DAILY_VIEW_MONTH === _todayM){
     const hasToday = (d.entries || []).some(e => e.date === today);
     if (!hasToday){
       d.entries = d.entries || [];
@@ -3861,6 +3879,7 @@ function renderDaily(){
   if (banner) banner.style.display = state.editMode ? "block" : "none";
   const tbody = document.getElementById("dailyBody");
   let html = "";
+  const selM = DAILY_VIEW_MONTH, selY = state.currentYear; let nRows = 0;
   // sub-total accumulators
   let sCafeU=0,sCafeO=0,sCafeC=0,sCafeT=0;
   let sRcU=0,sRcC=0,sRcT=0;
@@ -3869,6 +3888,10 @@ function renderDaily(){
   let sRcfU=0,sRcfC=0,sRcfT=0;
   let sAll=0;
   d.entries.forEach((e, idx) => {
+    const _em = e.date ? +e.date.split("-")[1] : 0;
+    const _ey = e.date ? +e.date.split("-")[0] : 0;
+    if (_ey !== selY || _em !== selM) return;   // month-wise view
+    nRows++;
     const t = dailyEntryTotals(e);
     // Sum only the visible stores so sub-totals/avg reflect the active set.
     // (Cafe/RcExpress/Truck/TCS are part of "All Total"; RCF is tracked separately
@@ -3955,9 +3978,9 @@ function renderDaily(){
     <td><b>${fmt(sAll)}</b></td>
     <td colspan="2" class="small">Target/day: ${fmt(d.perDayTarget)}</td>`;
   // Avg row
-  const n = d.entries.length || 1;
+  const n = nRows || 1;
   document.getElementById("dailyAvgRow").innerHTML = `
-    <td><b>Avg / Day</b></td><td class="small">${d.entries.length} day${d.entries.length===1?"":"s"}</td>
+    <td><b>Avg / Day</b></td><td class="small">${nRows} day${nRows===1?"":"s"}</td>
     <td data-store="cafe">${fmt0(sCafeU/n)}</td><td data-store="cafe">${fmt0(sCafeO/n)}</td><td data-store="cafe">${fmt0(sCafeC/n)}</td><td data-store="cafe">${fmt(sCafeT/n)}</td>
     <td data-store="rcExpress">${fmt0(sRcU/n)}</td><td data-store="rcExpress">${fmt0(sRcC/n)}</td><td data-store="rcExpress">${fmt(sRcT/n)}</td>
     <td data-store="truck">${fmt0(sTrU/n)}</td><td data-store="truck">${fmt0(sTrC/n)}</td><td data-store="truck">${fmt(sTrT/n)}</td>
@@ -3966,7 +3989,7 @@ function renderDaily(){
     <td><b>${fmt(sAll/n)}</b></td>
     <td colspan="2"></td>`;
   const info = document.getElementById("dailyCountInfo");
-  if (info) info.textContent = `${d.entries.length} day${d.entries.length===1?"":"s"} entered · YTD total ${fmt(sAll)}`;
+  if (info) info.textContent = `${nRows} day${nRows===1?"":"s"} entered · ${MONTHS[selM-1]} ${selY} total ${fmt(sAll)}`;
 }
 
 /* ====================================================================== */
