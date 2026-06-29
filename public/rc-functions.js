@@ -889,6 +889,22 @@ function renderIncentive(){
   const EMPS=getPD('incentive',key,[]);
   const tb=document.getElementById('incTbody'),tf=document.getElementById('incFoot');
   if(!tb)return;
+  const th=document.getElementById('incHead');
+  if(th) th.innerHTML=`<tr style="background:#fff3e6;border-bottom:2px solid #d0a060">
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:left">Employee</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:left">Code</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Incentive (₹)</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:center">Month</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:center">Date</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:center">Section</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">%</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Pool Share (₹)</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Per Day (₹)</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Leave</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Present</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:right">Actual (₹)</th>
+    <th style="padding:8px 10px;font-size:11px;color:#8B3300;text-align:center">Action</th>
+  </tr>`;
   const lbl=document.getElementById('incMonthLbl');if(lbl)lbl.textContent=p.label;
   tb.innerHTML='';let totalPayout=0;
   EMPS.forEach((emp,idx)=>{
