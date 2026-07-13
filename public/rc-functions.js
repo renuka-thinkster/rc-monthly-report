@@ -794,7 +794,7 @@ function syncMonthlyFromDaily(mk){
   const t=_dailyStoreTotals(mk);
   if(!t.any) return false;
   const md=getPD('sales',mk,{sub:0,locked:false,stores:[0,0,0,0,0].map(()=>[0,0,0,0,0,0])});
-  if(md.locked||md.manualEdit) return false;
+  if(md.manualEdit) return false;   // only a hand-edit blocks the rollup
   t.byStore.forEach((amt,i)=>{ if(md.stores[i]) md.stores[i][2]=amt; });
   md.sub=md.stores.reduce((s,r)=>s+(r[2]+r[3]+r[4]+r[5]),0);
   return true;
