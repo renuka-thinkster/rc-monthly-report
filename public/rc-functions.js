@@ -42,6 +42,7 @@ function nextPeriod(){
 }
 
 function refreshPage(id){
+  syncAllMonthlyFromDaily();
   const map = {
     dashboard:()=>setTimeout(buildCharts,100),
     sales: buildSalesReport, inventory: buildInventory,
@@ -708,7 +709,12 @@ function saveSalesMonth(mk){
 }
 
 
-function updateSales(mk,si,fi,val){getPD('sales',mk,{sub:0,locked:false,stores:[0,0,0,0,0].map(()=>[0,0,0,0,0,0])}).stores[si][fi]=parseInt(val)||0;buildSalesReport();}
+function updateSales(mk,si,fi,val){
+  const d=getPD('sales',mk,{sub:0,locked:false,stores:[0,0,0,0,0].map(()=>[0,0,0,0,0,0])});
+  d.stores[si][fi]=parseInt(val)||0;
+  d.manualEdit=true;                  // stop auto-sync overwriting this month
+  buildSalesReport();
+}
 function toggleSalesLock(mk){const d=getPD('sales',mk,{sub:0,locked:false,stores:[0,0,0,0,0].map(()=>[0,0,0,0,0,0])});d.locked=!d.locked;buildSalesReport();}
 
 // ══════════════════════════
@@ -766,6 +772,49 @@ function renderMonthlyInput(){
 // ══════════════════════════
 // ── LIVE reporting helpers — derive monthly figures straight from STORE.
 //    (replaces the old hardcoded MD_YEARLY / fcSales / MI_DERIVED sample data)
+// ── AUTO-ROLLUP: Daily Sales → Monthly Sales Report ──────────────
+// Sums each day's per-unit totals into the monthly store amounts, so the
+// Sales tab (and everything derived from it) never needs manual entry.
+function _dailyStoreTotals(mk){
+  const rows=(STORE.daily&&STORE.daily[mk])||[];
+  let cafe=0,exp=0,truck=0,tcs=0,rcf=0,any=false;
+  rows.forEach(r=>{
+    const d=calcRow(r);
+    if(d.grand>0) any=true;
+    cafe+=d.cafeT; exp+=d.expT; truck+=d.truckT;
+    tcs+=d.tcsT+d.tcsu+d.tcsc; rcf+=d.rcfT;
+  });
+  // store order: RC Express, Food Truck, Café, TCS, Events
+  return {any, byStore:[exp,truck,cafe,tcs,rcf]};
+}
+
+// Sync ONE month. Skips months that are locked (🔒) or manually edited —
+// that's the "edit option" escape hatch.
+function syncMonthlyFromDaily(mk){
+  const t=_dailyStoreTotals(mk);
+  if(!t.any) return false;
+  const md=getPD('sales',mk,{sub:0,locked:false,stores:[0,0,0,0,0].map(()=>[0,0,0,0,0,0])});
+  if(md.locked||md.manualEdit) return false;
+  t.byStore.forEach((amt,i)=>{ if(md.stores[i]) md.stores[i][2]=amt; });
+  md.sub=md.stores.reduce((s,r)=>s+(r[2]+r[3]+r[4]+r[5]),0);
+  return true;
+}
+
+function syncAllMonthlyFromDaily(){
+  if(!STORE.daily) return;
+  Object.keys(STORE.daily).forEach(mk=>syncMonthlyFromDaily(mk));
+}
+
+// Force a month back onto auto (clears manual override + lock).
+function resyncMonth(mk){
+  const md=STORE.sales&&STORE.sales[mk];
+  if(md){ md.manualEdit=false; md.locked=false; }
+  syncMonthlyFromDaily(mk);
+  buildSalesReport();
+  if(typeof autoSave==='function') autoSave();
+  flash('🔄 '+mk+' re-synced from Daily Sales');
+}
+
 function rcMonthFigures(mk){
   const sd = (STORE.sales && STORE.sales[mk]) || null;
   // stores order: 0=RC Express, 1=Food Truck, 2=Café, 3=TCS, 4=Events/RCF
@@ -1193,6 +1242,7 @@ function liveUpdate(key, idx, fieldIdx, val){
   const DAYS=getPD('daily',key,()=>[]);
   if(!DAYS[idx])return;
   DAYS[idx][2+fieldIdx]=parseInt(val)||0;
+  syncMonthlyFromDaily(key);
   // Recalc the totals in that row without full rebuild
   const d=calcRow(DAYS[idx]);
   const tgt=parseInt((document.getElementById('pdTarget')||{value:107000}).value)||107000;
@@ -1247,6 +1297,7 @@ renderConsumption();
 buildYearlySummary();
 setTimeout(renderTarget,100);
 setTimeout(renderIncentive,150);
+syncAllMonthlyFromDaily();
 
 // ════════════════════════════════════════════════════════════════
 // PERSISTENCE LAYER — talks to the existing /api/data endpoint
@@ -1349,6 +1400,10 @@ async function loadFromServer() {
     console.warn('Load from server failed, trying local cache:', e);
     restoreLocalCache();
   }
+
+  // After loading, roll the daily numbers up into the monthly Sales report so
+  // every derived view is correct on first paint.
+  try { syncAllMonthlyFromDaily(); } catch (e) {}
 }
 
 // SAVE — persists the entire STORE to the database. Surfaces the REAL error.
@@ -1432,6 +1487,7 @@ window.loadFromServer = loadFromServer;
 window.autoSave = autoSave;
 window.flushSave = flushSave;
 window.rcSaveTest = rcSaveTest;
+window.resyncMonth = resyncMonth;
 
 // ════════════════════════════════════════════════════════════════
 // AUTOSAVE WIRING — persist every edit. Leading ";" is ASI safety.
