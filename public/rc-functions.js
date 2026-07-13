@@ -1488,8 +1488,13 @@ window.autoSave = autoSave;
 window.flushSave = flushSave;
 window.rcSaveTest = rcSaveTest;
 window.resyncMonth = resyncMonth;
+window.STORE = STORE;
 window.syncMonthlyFromDaily = syncMonthlyFromDaily;
 window.syncAllMonthlyFromDaily = syncAllMonthlyFromDaily;
+window.buildSalesReport = buildSalesReport;
+window.renderMonthlyInput = renderMonthlyInput;
+window.buildFoodCost = buildFoodCost;
+window.buildYearlySummary = buildYearlySummary;
 
 // ════════════════════════════════════════════════════════════════
 // AUTOSAVE WIRING — persist every edit. Leading ";" is ASI safety.
