@@ -1587,6 +1587,7 @@ function monthRow(m){
 /*  RENDER — ① SALES                                                        */
 /* ====================================================================== */
 function renderSales(){
+  syncSalesFromDaily();
   const tbody = document.getElementById("salesBody");
   let html = "";
   const stores = effectiveStores();
@@ -1740,6 +1741,7 @@ function renderPurchase(){
 /*  RENDER — ④ FOOD COST (auto)                                             */
 /* ====================================================================== */
 function renderFoodCost(){
+  syncSalesFromDaily();
   const monthRowEl = document.getElementById("fcMonthRow");
   const subRowEl = document.getElementById("fcSubRow");
   const body = document.getElementById("fcBody");
@@ -1860,6 +1862,7 @@ function renderTargets(){
 /*  RENDER — MONTHLY INPUT                                                 */
 /* ====================================================================== */
 function renderMonthlyInput(){
+  syncSalesFromDaily();
   const tbody = document.getElementById("miBody");
   let html = "";
   let tS=0,tP=0,tF=0,tSF=0,tD=0,tM=0,tOI=0,tNP=0;
@@ -1900,6 +1903,7 @@ function renderMonthlyInput(){
 /*  RENDER — YEARLY SUMMARY                                                */
 /* ====================================================================== */
 function renderYearly(){
+  syncSalesFromDaily();
   // Populate "Start From" picker for the CURRENT year (other years use their own stored value)
   const startPicker = document.getElementById("ysStartPicker");
   if (startPicker){
@@ -2073,6 +2077,7 @@ function addTodayAndGo(){
 }
 
 function renderDashboard(){
+  syncSalesFromDaily();
   // Head KPIs (YTD)
   let tS=0,tP=0,tF=0,tNP=0,tSF=0,tD=0,tM=0;
   MONTHS.forEach(m=>{ const r=monthRow(m); tS+=r.sales; tP+=r.purchase; tF+=r.fc; tNP+=r.np; tSF+=r.sf; tD+=r.dump; tM+=r.mt; });
@@ -2357,6 +2362,51 @@ function storeAchievedFromDaily(m, s, asOfDate){
     else if (unit === "tcs")       total += num(e.tcs.t1) + num(e.tcs.t2);
   });
   return total;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTO-ROLLUP:  Daily Sales  →  monthly Sales sheet
+// Whatever is entered in Daily Sales is summed per store per month and
+// written into that store's "Dine Amt" cell on the Sales sheet. Every
+// derived view (Food Cost %, Monthly Input, Yearly, Dashboard, WhatsApp)
+// already reads from the Sales sheet, so the whole chain becomes automatic.
+//
+// SAFETY: a month with NO daily entries is never touched — that protects
+// Jan–Apr (and any month you key in by hand before Daily Sales exists).
+// "Events" has no Daily counterpart, so it always stays manual.
+// ══════════════════════════════════════════════════════════════════════
+function dailyStoreTotal(m, s){
+  if (!state.daily || !state.daily.entries) return 0;
+  const unit = STORE_TO_DAILY_UNIT[s];
+  if (!unit) return 0;                       // Events / custom sites: no daily mapping
+  const monthIdx = MONTHS.indexOf(m);
+  let total = 0;
+  state.daily.entries.forEach(e => {
+    if (!e.date) return;
+    if (+e.date.slice(0,4) !== state.currentYear) return;
+    if (+e.date.slice(5,7) - 1 !== monthIdx) return;
+    if (unit === "cafe")           total += num(e.cafe.upi) + num(e.cafe.online) + num(e.cafe.cash);
+    else if (unit === "rcExpress") total += num(e.rcExpress.upi) + num(e.rcExpress.cash);
+    else if (unit === "truck")     total += num(e.truck.upi) + num(e.truck.cash);
+    else if (unit === "tcs")       total += num(e.tcs.t1) + num(e.tcs.t2);
+  });
+  return total;
+}
+
+// Push the daily totals into the monthly Sales sheet. Daily is the source of
+// truth for the Dine Amt column; Home Delivery / Credit / FOC stay manual.
+function syncSalesFromDaily(){
+  if (!state || !state.rc || !state.rc.sales) return;
+  if (!state.daily || !Array.isArray(state.daily.entries)) return;
+  MONTHS.forEach(m => {
+    if (daysEnteredInMonth(m) === 0) return;       // no daily data → leave month alone
+    if (!state.rc.sales[m]) return;
+    STORES.forEach(s => {
+      if (STORE_TO_DAILY_UNIT[s] === null) return; // Events stays manual
+      if (!state.rc.sales[m][s]) return;
+      state.rc.sales[m][s].dineAmt = dailyStoreTotal(m, s);
+    });
+  });
 }
 // Count daily entries within the given month, optionally up to (and including) a cutoff date.
 function daysEnteredInMonth(m, asOfDate){
@@ -4046,6 +4096,7 @@ function resetData(){
 /*  WHATSAPP SHARE                                                         */
 /* ====================================================================== */
 function buildSummaryText(m){
+  syncSalesFromDaily();
   const r = monthRow(m);
   // Tabular helpers — WhatsApp renders triple-backtick blocks in monospaced font,
   // which lets columns line up perfectly on phone screens.
