@@ -1627,6 +1627,9 @@ const num = v => {
   return isFinite(n) ? n : 0;
 };
 const fmt = n => "₹" + Math.round(num(n)).toLocaleString("en-IN");
+// Money shown to the paisa — used by the incentive sheet, where a per-day
+// rate like 1000 ÷ 30 = 33.33 must not be rounded away.
+const fmt2 = n => "₹" + num(n).toLocaleString("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmt0 = n => Math.round(num(n)).toLocaleString("en-IN");
 const pct = (a,b)=> num(b)? ((num(a)*100)/num(b)).toFixed(2)+"%" : "—";
 
@@ -2582,39 +2585,42 @@ function ensureIncentiveMonth(m){
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
   // ── HOW AN INCENTIVE IS WORKED OUT ───────────────────────────────
-  //   Calculated    = Total Incentive pool × employee %  ÷ 100
+  //   Calculated    = Total Incentive pool × employee % ÷ 100
   //   Per Day       = Calculated ÷ Days in month
   //   Present Days  = Days in month − Leave Days
   //   Incentive     = Per Day × Present Days
   //
   //   e.g. pool 50,000 · 2% · 30-day month · 2 days leave
-  //        Calculated = 50,000 × 2 ÷ 100 = 1,000
-  //        Per Day    = 1,000 ÷ 30       = 33.33
-  //        Incentive  = 33.33 × 28       = 933
+  //        Calculated = 50,000 × 2 ÷ 100 = 1,000.00
+  //        Per Day    = 1,000 ÷ 30       =    33.33   (exact 33.333333…)
+  //        Incentive  = 33.333333… × 28  =   933.33
   //
+  //   Amounts are kept at full precision and rounded to 2 decimals only for
+  //   display, so the per-day rounding never compounds across the month.
   //   "Actual Incentive" (if typed) replaces the pool × % figure.
   //   "Fix Incentive"    (if typed) replaces both.
   //   Leave Days are ALWAYS deducted, whichever figure is used.
+  const r2 = v => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
   const days = num(monthDays) || 30;
   const typed = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
     ? num(emp.actualOverride) : null;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
   const base = num(monthTotalIncentive);
-  // Whole-month entitlement, before any leave is taken off.
-  let calc;
-  if (hasFix)             calc = Math.round(num(emp.fixIncentive));
-  else if (typed !== null) calc = Math.round(typed);
-  else                     calc = Math.round(base * num(emp.pct) / 100);
-  const perDayRaw = days > 0 ? calc / days : 0;
-  const perDay = Math.round(perDayRaw);
+  let calcRaw;
+  if (hasFix)              calcRaw = num(emp.fixIncentive);
+  else if (typed !== null) calcRaw = typed;
+  else                     calcRaw = base * num(emp.pct) / 100;
+  const calc = r2(calcRaw);
+  const perDayRaw = days > 0 ? calcRaw / days : 0;      // full precision
+  const perDay = r2(perDayRaw);                         // 33.33
   const presentDays = Math.max(0, days - num(emp.leaveDays));
-  const computedActual = Math.round(perDayRaw * presentDays);
+  const computedActual = r2(perDayRaw * presentDays);   // 933.33
   const hasOverride = typed !== null;
   const actualIncentive = computedActual;
   // "Absent" is a marker only — the deduction comes from Leave Days.
   const final = computedActual;
-  return { base, calc, perDay, perDayRaw, presentDays, computedActual, actualIncentive,
-           final: Math.round(final), hasFix, hasOverride };
+  return { base, calc, calcRaw, perDay, perDayRaw, presentDays, computedActual,
+           actualIncentive, final, hasFix, hasOverride };
 }
 // Is the incentive sheet editable for a given field type? "creator" | "manager"
 function incentiveCanEdit(mData, fieldType){
@@ -2802,13 +2808,13 @@ function renderIncentive(){
     const pctDisp = emp.pct;  // shown as decimal
     html += `<tr${emp.absent?' style="background:#fef2f2"':''}>
       <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} placeholder="Employee name" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
-      <td class="derived-cell ${finalCls}"><b>${fmt(c.final)}</b></td>
+      <td class="derived-cell ${finalCls}"><b>${fmt2(c.final)}</b></td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${ym}</td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
       <td><select data-eid="${emp.id}" data-ef="section" ${cDis} style="padding:4px;font-size:11.5px">${INCENTIVE_SECTIONS.map(s=>`<option ${s===emp.section?"selected":""}>${s}</option>`).join("")}</select></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${pctDisp}" data-eid="${emp.id}" data-ef="pct" ${mDis} title="Whole number — type 12 for 12%" placeholder="e.g. 12"/></td>
-      <td class="derived-cell" title="Total Incentive × % ÷ 100">${fmt(c.calc)}</td>
-      <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
+      <td class="derived-cell" title="Total Incentive pool × % ÷ 100">${fmt2(c.calc)}</td>
+      <td class="derived-cell" title="Calculated ÷ ${days} days (exact ${c.perDayRaw.toFixed(4)})">${fmt2(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Whole-month ${Math.round(c.calc)} ÷ ${days} days = ${c.perDayRaw.toFixed(2)}/day · × ${c.presentDays} present days = ${Math.round(c.final)}. Leave blank to use pool × %." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
@@ -2838,9 +2844,9 @@ function renderIncentive(){
   // Total row
   document.getElementById("incTotalRow").innerHTML = `
     <td><b>TOTAL — ${mData.employees.length} employee${mData.employees.length===1?"":"s"}</b></td>
-    <td><b>${fmt(totalPayout)}</b></td>
+    <td><b>${fmt2(totalPayout)}</b></td>
     <td colspan="13"></td>`;
-  document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt(totalPayout)}`;
+  document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt2(totalPayout)}`;
 }
 // Copy base employee info (name, code, section, %) from another month into the current month.
 // ══════════════════════════════════════════════════════════════════
