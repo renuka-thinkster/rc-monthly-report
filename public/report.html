@@ -512,6 +512,7 @@
         <span id="incApprovalStatus" class="small"></span>
         <button class="btn btn-primary" id="incAddBtn" onclick="addIncentiveEmployee()">+ Add Employee</button>
         <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names from another month">📋 Copy Employees</button>
+        <button class="btn btn-secondary" id="incClearAmtBtn" onclick="clearTypedIncentives()" title="Clear the typed Actual Incentive values so the pool × % calculation applies again">🧹 Clear Typed Amounts</button>
         <button class="btn btn-secondary" id="incTemplateBtn" onclick="downloadIncentiveTemplate()" title="Download the Excel format used for bulk upload">📥 Template</button>
         <button class="btn btn-secondary" id="incUploadBtn" onclick="triggerIncentiveUpload()" title="Bulk upload employees from an Excel file">📤 Upload Excel</button>
         <input type="file" id="incUploadInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIncentiveUpload(this)"/>
@@ -2745,6 +2746,8 @@ function renderIncentive(){
   const copyBtn = document.getElementById("incCopyBtn");
   const upBtn = document.getElementById("incUploadBtn");
   if (upBtn) upBtn.disabled = !canCreator;
+  const clrBtn = document.getElementById("incClearAmtBtn");
+  if (clrBtn) clrBtn.disabled = !canManager;
   if (copyBtn) copyBtn.disabled = !canCreator;
 
   // Shared Total Incentive pool (manager)
@@ -2804,7 +2807,7 @@ function renderIncentive(){
       <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Type the FULL-MONTH incentive here; Leave Days are deducted per day. Now: ${Math.round(c.perDay)}/day × ${c.presentDays} present days = ${Math.round(c.actualIncentive)}. For an exact amount with no deduction use Fix Incentive." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="${c.hasOverride ? 'OVERRIDING the % calculation. Clear this cell (or use 🧹 Clear Typed Amounts) to go back to pool × %. ' : ''}Type the FULL-MONTH incentive here; Leave Days are deducted per day. Now: ${Math.round(c.perDay)}/day × ${c.presentDays} present days = ${Math.round(c.actualIncentive)}. For an exact amount with no deduction use Fix Incentive." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
       <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
@@ -2853,6 +2856,26 @@ function downloadIncentiveTemplate(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Employees");
   XLSX.writeFile(wb, "RC_Employee_Upload_Template.xlsx");
+}
+
+// Wipe the manually typed "Actual Incentive" values for this month so the
+// pool × % calculation drives the numbers again.
+function clearTypedIncentives(){
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (!incentiveCanEdit(mData, "manager")){
+    alert("Only an admin / manager can clear these amounts.");
+    return;
+  }
+  const n = (mData.employees || []).filter(e =>
+    e.actualOverride !== "" && e.actualOverride !== null && e.actualOverride !== undefined).length;
+  if (!n){ alert("No typed amounts to clear — the % calculation is already being used."); return; }
+  if (!confirm("Clear the typed Actual Incentive value for " + n + " employee" + (n===1?"":"s") +
+               "?\n\nThe incentive will then be calculated from the pool and each employee's %.")) return;
+  mData.employees.forEach(e => { e.actualOverride = ""; });
+  saveAll();
+  renderIncentive();
+  flash("🧹 Cleared " + n + " typed amount" + (n===1?"":"s") + " — now using pool × %");
 }
 
 function triggerIncentiveUpload(){
