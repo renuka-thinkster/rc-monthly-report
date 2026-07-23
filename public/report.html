@@ -248,7 +248,8 @@
       <button class="btn btn-link" onclick="shareWhatsAppLink()">🔗 WA — Data Link</button>
       <button class="btn btn-secondary" onclick="window.print()">🖨️ Print/PDF</button>
       <button class="btn btn-secondary" id="globalEditBtn" onclick="toggleEditMode()" title="Unlock past months and saved daily entries for editing"></button>
-      <span id="saveStatus" class="small" style="margin-left:auto"></span>
+      <span id="saveIndicator" class="small" style="margin-left:auto;font-weight:700"></span>
+      <span id="saveStatus" class="small" style="margin-left:10px"></span>
     </div>
   </div>
 
@@ -1498,7 +1499,25 @@ function isEditingInput(){
   return DATA_INPUT_ATTRS.some(k => ae.dataset && ae.dataset[k] !== undefined);
 }
 let _saveTimer = null;
+let _dirty      = false;   // edits exist that the DB has not confirmed yet
+let _saveFailed = false;   // the most recent save attempt did not succeed
+
+// Persistent save-state badge. Kept separate from flash() so transient
+// messages can't wipe it.
+function setSaveState(st){
+  const el = document.getElementById("saveIndicator");
+  if (!el) return;
+  if (st === "saving"){       el.textContent = "⏳ Saving…";                     el.style.color = "#6b7280"; }
+  else if (st === "saved"){   el.textContent = "✓ All changes saved";           el.style.color = "#1a7f37"; }
+  else if (st === "pending"){ el.textContent = "● Unsaved changes…";            el.style.color = "#b26a00"; }
+  else if (st === "failed"){  el.textContent = "⚠️ NOT SAVED — do not close";    el.style.color = "#b91c1c"; }
+  else { el.textContent = ""; }
+}
+// True while anything is still un-persisted.
+function hasUnsavedWork(){ return _dirty || _saveFailed || !!_saveTimer; }
+
 function _persistData(){
+  _saveTimer = null;
   // Legacy "store" projection — kept so the DB shape never changes.
   const data = __RCADAPT.unitsToStore(state);
   // FULL-FIDELITY passthrough. The legacy projection above silently drops
@@ -1520,15 +1539,30 @@ function _persistData(){
     body: JSON.stringify({ data }),
     keepalive: true
   }).then(async (r) => {
-    if (r.status === 401){ topRedirectLogin(); return; }
-    if (!r.ok){ const t = await r.text().catch(()=> ''); console.error('Save failed', r.status, t); flash('⚠️ Save failed (HTTP ' + r.status + ')'); }
-  }).catch((e) => { console.error('Save network error', e); flash('⚠️ Network error — not saved'); });
+    if (r.status === 401){ _saveFailed = true; setSaveState("failed"); topRedirectLogin(); return; }
+    if (!r.ok){
+      const t = await r.text().catch(()=> '');
+      console.error('Save failed', r.status, t);
+      _saveFailed = true; _dirty = true; setSaveState("failed");
+      flash('⚠️ Save failed (HTTP ' + r.status + ')');
+    } else {
+      _saveFailed = false; _dirty = false; setSaveState("saved");
+    }
+  }).catch((e) => {
+    console.error('Save network error', e);
+    _saveFailed = true; _dirty = true; setSaveState("failed");
+    flash('⚠️ Network error — not saved');
+  });
 }
 function saveAll(silent){
   // DATABASE-ONLY persistence (debounced). No localStorage.
+  // NOTE: we no longer flash "✓ Saved" here — at this point nothing has been
+  // written yet. The badge shows the real state and turns green only once
+  // the database confirms the write.
+  _dirty = true;
+  setSaveState("pending");
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(_persistData, 600);
-  if (!silent) flash("✓ Saved");
   if (isEditingInput()){
     // Defer the visual rebuild until the user finishes with this field.
     _pendingRefresh = true;
@@ -4709,7 +4743,25 @@ async function refreshAuthCache(){
 function flushSave(){ if (_saveTimer){ clearTimeout(_saveTimer); _saveTimer = null; _persistData(); } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 window.addEventListener('pagehide', flushSave);
-window.addEventListener('beforeunload', flushSave);
+
+// Warn before refresh / closing the tab / navigating away while work is
+// still un-persisted. We push the pending save out first (keepalive lets it
+// finish), then ask the browser to confirm. Browsers show their own standard
+// wording — a custom string is not allowed.
+window.addEventListener('beforeunload', (e) => {
+  flushSave();
+  if (hasUnsavedWork()){
+    e.preventDefault();
+    e.returnValue = "";          // required for the prompt to appear
+    return "";
+  }
+});
+// Switching tabs inside the app never loses data (state lives in memory), but
+// committing right away keeps the database in step.
+document.addEventListener("click", (e) => {
+  const t = e.target.closest && e.target.closest(".tab");
+  if (t && hasUnsavedWork()) flushSave();
+}, true);
 
 async function boot(){
   // 1) Confirm the session (the parent app gates access, but we need the role here).
