@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        <b>Base Amount</b> + <b>%</b> increment = <b>Revised</b>. <b>Per Day</b> = Revised ÷ Days in month. <b>Final Incentive</b> = Per Day × Present Days (Days − Leave). <i>Example: ₹50,000 base, 2% → ₹51,000 · ÷30 = ₹1,700/day · 2 days leave → ₹51,000 − ₹3,400 = <b>₹47,600</b>.</i> Leave a Base Amount blank to use the sheet's <b>Default Base</b>. <b>Fix Incentive</b> overrides everything. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
+        <b>Base Amount</b> + <b>%</b> increment = <b>Revised</b>. <b>Per Day</b> = Revised ÷ Days in month. <b>Final Incentive</b> = Per Day × Present Days (Days − Leave). <i>Example: ₹50,000 base, 2% → ₹51,000 · ÷30 = ₹1,700/day · 2 days leave → ₹51,000 − ₹3,400 = <b>₹47,600</b>.</i> Leave a Base Amount blank to use the sheet's <b>Default Base</b>. <b>Fix Incentive</b> replaces Base + % with a whole-month figure — leave is still deducted from it. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -548,7 +548,7 @@
               <th>Leave Days</th>
               <th>Present Days</th>
               <th title="The employee's base amount (e.g. their monthly salary). The % increment is added to this, then leave is deducted per day. Leave blank to use the sheet's Default Base.">Base Amount<br/><span class="small" style="font-weight:normal">₹ before % &amp; leave</span></th>
-              <th>Fix Incentive</th>
+              <th title="Type the whole-month amount here to skip the Base + % calculation. Leave Days are still deducted from it.">Fix Incentive<br/><span class="small" style="font-weight:normal">full-month ₹ · skips %</span></th>
               <th title="A marker only. The incentive is reduced per-day through the Leave Days column, not by this box.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">marker only</div></th>
               <th>Remark</th>
               <th></th>
@@ -2582,33 +2582,32 @@ function ensureIncentiveMonth(m){
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
   // ── HOW AN INCENTIVE IS WORKED OUT ───────────────────────────────
-  //   Base            = the employee's own amount (Base Amount column),
-  //                     or the sheet's Default Base when that cell is empty
-  //   Revised         = Base + (Base × % ÷ 100)        ← % is an INCREMENT
-  //   Per Day         = Revised ÷ Days in month
-  //   Present Days    = Days in month − Leave Days
-  //   Final Incentive = Per Day × Present Days
+  //   Full-month figure =  Fix Incentive, if one is typed (the % is skipped)
+  //                        otherwise Base + (Base × % ÷ 100)
+  //   Per Day           =  Full-month figure ÷ Days in month
+  //   Present Days      =  Days in month − Leave Days
+  //   Final Incentive   =  Per Day × Present Days
   //
-  //   e.g. ₹50,000 base, 2% increment, 30-day month, 2 days leave
-  //        Revised = 50,000 + 1,000 = 51,000
-  //        Per Day = 51,000 ÷ 30    = 1,700
-  //        Final   = 1,700 × 28     = 47,600
+  //   e.g. base 50,000 + 2%  -> 51,000 ÷ 30 = 1,700/day, 2 days leave -> 47,600
+  //   e.g. Fix 10,000        -> 10,000 ÷ 30 =   333/day, 2 days leave ->  9,333
+  //   Leave Days are ALWAYS deducted, whichever figure is used.
   const days = num(monthDays) || 30;
   const typed = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
     ? num(emp.actualOverride) : null;
   const base = (typed !== null) ? typed : num(monthTotalIncentive);
-  const calc = Math.round(base + (base * num(emp.pct) / 100));   // Revised amount
+  const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
+  // "Revised" = the whole-month entitlement before any leave is taken off.
+  const calc = hasFix
+    ? Math.round(num(emp.fixIncentive))
+    : Math.round(base + (base * num(emp.pct) / 100));
   const perDayRaw = days > 0 ? calc / days : 0;
   const perDay = Math.round(perDayRaw);
   const presentDays = Math.max(0, days - num(emp.leaveDays));
   const computedActual = Math.round(perDayRaw * presentDays);
   const hasOverride = typed !== null;
   const actualIncentive = computedActual;
-  const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
   // "Absent" is a marker only — the deduction comes from Leave Days.
-  let final;
-  if (hasFix) final = Math.round(num(emp.fixIncentive));
-  else final = computedActual;
+  const final = computedActual;
   return { base, calc, perDay, presentDays, computedActual, actualIncentive,
            final: Math.round(final), hasFix, hasOverride };
 }
@@ -2808,7 +2807,7 @@ function renderIncentive(){
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Base ${Math.round(c.base)} + ${num(emp.pct)}% = ${Math.round(c.calc)} · ÷ ${days} days = ${Math.round(c.perDay)}/day · × ${c.presentDays} present days = ${Math.round(c.final)}. Blank uses the sheet's Default Base. Fix Incentive overrides everything." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Whole-month amount — replaces Base + %, but Leave Days are still deducted per day." style="background:#fefce8"/></td>
       <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td>${(canCreator) ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeIncentiveEmployee('${emp.id}')" title="Remove employee">🗑️</button>` : ''}</td>
