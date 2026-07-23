@@ -1257,7 +1257,7 @@ function storeToUnits(S){
       // had none, so all edits landed on the first row.
       id: e.id || ("emp_" + k + "_" + ei + "_" + Math.floor(Math.random()*100000)),
       name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
-      pct:(_n(e.pct)||0)/100, leaveDays:_n(e.leave), absent:!!e.absent,
+      pct:_pctIn(e.pct), leaveDays:_n(e.leave), absent:!!e.absent,
       fixIncentive:e.fixInc||'', actualOverride:e.mgrOverride||'', remark:e.remark||''}));
     const _im=(S.incentiveMeta||{})[k]||{};
     incentive[_name(k)]={
@@ -1336,6 +1336,11 @@ function unitsToStore(state){
   return S;
 }
 function _todayISO(){ return new Date().toISOString().slice(0,10); }
+// Percentages are WHOLE numbers in the UI (12 = 12%). Older rows were stored
+// two different ways: scaled ×100 (1200) and plain (12). Dividing blindly turned
+// a plain 12 into 0.12 — i.e. 0.12%, which rounds every incentive to ₹0.
+// Treat >=100 as scaled, anything else as already-whole.
+function _pctIn(v){ const n=_n(v); return n >= 100 ? n/100 : n; }
 
 return { storeToUnits, unitsToStore };
 
@@ -1372,9 +1377,27 @@ async function loadState(){
   state.auth.incentiveRoles = payload.incentiveRoles || { approver:"", creator:"" };
   state.auth.vendorPayout   = payload.vendorSettings  || { approverPhone:"" };
 
+  normalizeIncentivePct();
   bindUnit(state.currentUnit);
   if (!state.years[state.currentYear]) state.years[state.currentYear] = makeYearData(state.currentYear);
   bindYear(state.currentYear);
+}
+// Repair employee % values that were previously mangled into fractions
+// (0.12 instead of 12). The sheet only ever uses whole-number percentages,
+// so any value between 0 and 1 is a mis-scaled record — lift it back.
+function normalizeIncentivePct(){
+  let fixed = 0;
+  Object.values(state.units || {}).forEach(u => {
+    Object.values((u && u.years) || {}).forEach(y => {
+      Object.values((y && y.incentive) || {}).forEach(mo => {
+        ((mo && mo.employees) || []).forEach(e => {
+          const p = num(e.pct);
+          if (p > 0 && p < 1){ e.pct = Math.round(p * 10000) / 100; fixed++; }
+        });
+      });
+    });
+  });
+  if (fixed) console.info("Repaired " + fixed + " employee % value(s) (0.12 -> 12).");
 }
 function ingestParsed(parsed){
   state.auth = parsed.auth || { users:{}, authorizedEmails:[], session:null };
