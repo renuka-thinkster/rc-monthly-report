@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        Enter each employee's full-month amount in <b>Actual Incentive</b>. <b>Per Day</b> = that amount ÷ Days in month, and <b>Leave Days</b> are deducted at that rate. Use <b>Fix Incentive</b> for an exact amount with no deduction. <b>Absent</b> is only a marker — for a whole month off set Leave Days = days in month.
+        <b>Two ways to set an incentive — use either.</b> <b>(A) By percentage:</b> enter the <b>Total Incentive pool</b> and give each employee a <b>%</b> — Calculated = pool × % ÷ 100. <b>(B) By amount:</b> type the employee's full-month figure straight into <b>Actual Incentive</b>. Either way, <b>Per Day</b> = that figure ÷ Days in month and <b>Leave Days</b> are deducted at that rate. <b>Fix Incentive</b> = an exact amount with no deduction. <b>Absent</b> is only a marker — for a whole month off set Leave Days = days in month.
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -520,12 +520,16 @@
         <button class="btn btn-wa" onclick="shareIncentiveWA()">💬 Send via WhatsApp</button>
       </div>
       <div class="toolbar" style="margin-bottom:10px">
-        <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Days in month:
+        <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Total Incentive (pool ₹):
+          <input type="text" inputmode="decimal" class="numinput" id="incTotalIncentive" style="width:110px"/>
+        </label>
+        <label class="small" style="margin-left:10px">Days in month:
           <input type="text" inputmode="decimal" class="numinput" id="incDays" style="width:55px"/>
         </label>
         <label class="small" style="margin-left:10px">Incentive Date:
           <input type="date" id="incDate" style="padding:5px 7px;font-size:12px"/>
         </label>
+        <span id="incPoolWarn" class="small" style="color:#b91c1c;font-weight:700"></span>
         <span id="incTotalPayout" class="small" style="margin-left:auto;font-weight:700"></span>
       </div>
       <div class="scroll-x">
@@ -537,7 +541,9 @@
               <th style="min-width:110px;width:110px">Year-Month</th>
               <th style="min-width:110px;width:110px">Incentive Date</th>
               <th>Section</th>
-              <th title="Actual Incentive ÷ Days in month — this is the rate each leave day is deducted at.">Per Day<br/><span class="small" style="font-weight:normal">amount ÷ days</span></th>
+              <th>%<br/><span class="small" style="font-weight:normal">whole no. — 12 = 12%</span></th>
+              <th>Calculated<br/><span class="small" style="font-weight:normal">Total × % ÷ 100</span></th>
+              <th title="Per Day = (Actual Incentive if typed, otherwise Calculated) ÷ Days in month. This is the rate each leave day is deducted at.">Per Day<br/><span class="small" style="font-weight:normal">÷ days in month</span></th>
               <th>Leave Days</th>
               <th>Present Days</th>
               <th title="Type the employee's FULL-MONTH incentive here — Leave Days are then deducted per day.">Actual Incentive<br/><span class="small" style="font-weight:normal">full-month ₹ · leave deducted</span></th>
@@ -2741,6 +2747,23 @@ function renderIncentive(){
   if (upBtn) upBtn.disabled = !canCreator;
   if (copyBtn) copyBtn.disabled = !canCreator;
 
+  // Shared Total Incentive pool (manager)
+  const totInp = document.getElementById("incTotalIncentive");
+  if (totInp){
+    totInp.value = mData.totalIncentive;
+    totInp.disabled = !canManager;
+    totInp.oninput = e => { mData.totalIncentive = num(e.target.value); saveAll(true); };
+  }
+  // Loud warning while the pool is empty — this is the #1 reason every row
+  // shows ₹0: each incentive is a PERCENTAGE of this pool.
+  const poolWarn = document.getElementById("incPoolWarn");
+  if (poolWarn){
+    const anyTyped = (mData.employees || []).some(e =>
+      e.actualOverride !== "" && e.actualOverride !== null && e.actualOverride !== undefined);
+    poolWarn.innerHTML = (num(mData.totalIncentive) > 0 || anyTyped)
+      ? ""
+      : "⚠️ Either enter the pool (for % based split) or type each amount in Actual Incentive.";
+  }
   // Days + date inputs
   const daysInp = document.getElementById("incDays");
   if (daysInp){
@@ -2758,7 +2781,7 @@ function renderIncentive(){
   // Body rows
   const tbody = document.getElementById("incBody");
   if (!mData.employees.length){
-    tbody.innerHTML = `<tr><td colspan="13" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names from another month.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names from another month.</td></tr>`;
     document.getElementById("incTotalRow").innerHTML = "";
     document.getElementById("incTotalPayout").textContent = "";
     return;
@@ -2769,12 +2792,15 @@ function renderIncentive(){
     const c = incentiveCalc(emp, days, mData.totalIncentive);
     totalPayout += c.final;
     const finalCls = emp.absent ? "badge-bad" : "badge-good";
+    const pctDisp = emp.pct;  // shown as decimal
     html += `<tr${emp.absent?' style="background:#fef2f2"':''}>
       <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} placeholder="Employee name" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td class="derived-cell ${finalCls}"><b>${fmt(c.final)}</b></td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${ym}</td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
       <td><select data-eid="${emp.id}" data-ef="section" ${cDis} style="padding:4px;font-size:11.5px">${INCENTIVE_SECTIONS.map(s=>`<option ${s===emp.section?"selected":""}>${s}</option>`).join("")}</select></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${pctDisp}" data-eid="${emp.id}" data-ef="pct" ${mDis} title="Whole number — type 12 for 12%" placeholder="e.g. 12"/></td>
+      <td class="derived-cell" title="Total Incentive × % ÷ 100">${fmt(c.calc)}</td>
       <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
@@ -2806,21 +2832,21 @@ function renderIncentive(){
   document.getElementById("incTotalRow").innerHTML = `
     <td><b>TOTAL — ${mData.employees.length} employee${mData.employees.length===1?"":"s"}</b></td>
     <td><b>${fmt(totalPayout)}</b></td>
-    <td colspan="11"></td>`;
+    <td colspan="13"></td>`;
   document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt(totalPayout)}`;
 }
 // Copy base employee info (name, code, section, %) from another month into the current month.
 // ══════════════════════════════════════════════════════════════════
 // EMPLOYEE BULK UPLOAD (Excel)  — template download + validated import
 // ══════════════════════════════════════════════════════════════════
-const INC_TEMPLATE_COLS = ["Name","Section","Incentive Amount","Leave Days","Absent","Remark"];
+const INC_TEMPLATE_COLS = ["Name","Section","% Incentive","Leave Days","Absent","Remark"];
 
 function downloadIncentiveTemplate(){
   if (typeof XLSX === "undefined"){ alert("Excel library still loading — try again in a moment."); return; }
   const aoa = [
     INC_TEMPLATE_COLS,
-    ["Yasin Shek","Kitchen",50000,0,"No",""],
-    ["Sample Name","Counter",20000,2,"No","example row — delete before uploading"]
+    ["Yasin Shek","Kitchen",12,0,"No",""],
+    ["Sample Name","Counter",8,2,"No","example row — delete before uploading"]
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{wch:24},{wch:14},{wch:13},{wch:11},{wch:9},{wch:34}];
@@ -2883,9 +2909,7 @@ function handleIncentiveUpload(input){
       emp.name = name;
       const sec = String(pick(row, ["section","dept","department"])).trim();
       emp.section = INCENTIVE_SECTIONS.includes(sec) ? sec : "Kitchen";
-      // Full-month amount — Leave Days are deducted from it per day.
-      const _amt = pick(row, ["incentive amount","amount","incentive","incentive amount (₹)","incentive (₹)"]);
-      emp.actualOverride = (String(_amt).trim() === "") ? "" : String(num(_amt));
+      emp.pct = num(pick(row, ["% incentive","%","pct","percent","incentive %"]));
       emp.leaveDays = num(pick(row, ["leave days","leave","leaves"]));
       const abs = String(pick(row, ["absent"])).trim().toLowerCase();
       emp.absent = (abs === "yes" || abs === "y" || abs === "true" || abs === "1");
@@ -2980,22 +3004,22 @@ function exportIncentiveExcel(){
   const mData = ensureIncentiveMonth(m);
   const rows = incentiveRows(m);
   const header = ["Name","Incentive","YearMonth","Incentive Date","Section",
-                  "Per Day","Leave Days","Present Days",
+                  "% Incentive","Calculated (Total×%)","Per Day","Leave Days","Present Days",
                   "Actual Incentive","Fix Incentive","Absent","Remark","Final Incentive"];
   const aoa = [
     [`RC Employee Incentive — ${m} ${state.currentYear}`],
-    [`Days in month: ${num(mData.days)}`],
+    [`Total Incentive Pool: ${num(mData.totalIncentive)}`, `Days in month: ${num(mData.days)}`],
     [],
     header
   ];
   rows.forEach(r => aoa.push([
     r.name, r.final, r.ym, r.date, r.section,
-    r.perDay, r.leave, r.presentDays,
+    r.pct, r.calc, r.perDay, r.leave, r.presentDays,
     r.actual, r.fix, r.absent ? "Yes" : "No", r.remark, r.final
   ]));
   const totalPayout = rows.reduce((s,r)=> s + r.final, 0);
   aoa.push([]);
-  aoa.push(["", "", "", "", "", "", "", "", "", "", "", "TOTAL", totalPayout]);
+  aoa.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "TOTAL", totalPayout]);
   if (mData.approved) aoa.push([`Approved by ${mData.approvedBy} on ${mData.approvedAt? new Date(mData.approvedAt).toLocaleDateString() : ""}`]);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
