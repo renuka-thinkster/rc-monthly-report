@@ -529,6 +529,7 @@
         <label class="small" style="margin-left:10px">Incentive Date:
           <input type="date" id="incDate" style="padding:5px 7px;font-size:12px"/>
         </label>
+        <span id="incPoolWarn" class="small" style="color:#b91c1c;font-weight:700"></span>
         <span id="incTotalPayout" class="small" style="margin-left:auto;font-weight:700"></span>
       </div>
       <div class="scroll-x">
@@ -547,7 +548,7 @@
               <th>Present Days</th>
               <th>Actual Incentive<br/><span class="small" style="font-weight:normal">PerDay × Present · editable</span></th>
               <th>Fix Incentive</th>
-              <th>Absent</th>
+              <th title="Ticked = the employee forfeits the WHOLE month's incentive (₹0). For part-month leave use the Leave Days column instead.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">whole month → ₹0</div></th>
               <th>Remark</th>
               <th></th>
             </tr>
@@ -2739,6 +2740,14 @@ function renderIncentive(){
     totInp.disabled = !canManager;
     totInp.oninput = e => { mData.totalIncentive = num(e.target.value); saveAll(true); };
   }
+  // Loud warning while the pool is empty — this is the #1 reason every row
+  // shows ₹0: each incentive is a PERCENTAGE of this pool.
+  const poolWarn = document.getElementById("incPoolWarn");
+  if (poolWarn){
+    poolWarn.innerHTML = (num(mData.totalIncentive) > 0)
+      ? ""
+      : "⚠️ Enter the Total Incentive pool — every row stays ₹0 until you do.";
+  }
   // Days + date inputs
   const daysInp = document.getElementById("incDays");
   if (daysInp){
@@ -2781,7 +2790,7 @@ function renderIncentive(){
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Per Day × Present Days = ${Math.round(c.computedActual)}. Admin/manager can type here to round off." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
-      <td style="text-align:center"><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/></td>
+      <td style="text-align:center" ${(emp.absent && num(emp.leaveDays)>0) ? 'title="This employee has Leave Days entered AND is marked Absent — Absent wins, so the incentive is ₹0. Untick Absent if you only meant part-month leave."' : ''}><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)>0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Absent overrides leave">⚠ overrides leave</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td>${(canCreator) ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeIncentiveEmployee('${emp.id}')" title="Remove employee">🗑️</button>` : ''}</td>
     </tr>`;
