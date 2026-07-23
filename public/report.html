@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        <b>Base Amount</b> + <b>%</b> increment = <b>Revised</b>. <b>Per Day</b> = Revised ÷ Days in month. <b>Final Incentive</b> = Per Day × Present Days (Days − Leave). <i>Example: ₹50,000 base, 2% → ₹51,000 · ÷30 = ₹1,700/day · 2 days leave → ₹51,000 − ₹3,400 = <b>₹47,600</b>.</i> Leave a Base Amount blank to use the sheet's <b>Default Base</b>. <b>Fix Incentive</b> replaces Base + % with a whole-month figure — leave is still deducted from it. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
+        Enter the amount in <b>Actual Incentive</b>. <b>Calculated</b> = that amount + the <b>%</b> increment. <b>Per Day</b> = Calculated ÷ Days in month. <b>Final Incentive</b> = Per Day × Present Days (Days − Leave). <i>Example: ₹50,000 with 2% → ₹51,000 · ÷30 = ₹1,700/day · 2 days leave → <b>₹47,600</b>.</i> <b>Fix Incentive</b> replaces the amount + % with a whole-month figure — leave is still deducted from it. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -512,7 +512,7 @@
         <span id="incApprovalStatus" class="small"></span>
         <button class="btn btn-primary" id="incAddBtn" onclick="addIncentiveEmployee()">+ Add Employee</button>
         <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names from another month">📋 Copy Employees</button>
-        <button class="btn btn-secondary" id="incClearAmtBtn" onclick="clearTypedIncentives()" title="Clear the per-employee Base Amounts so everyone falls back to the sheet's Default Base">🧹 Clear Base Amounts</button>
+        <button class="btn btn-secondary" id="incClearAmtBtn" onclick="clearTypedIncentives()" title="Clear the per-employee Actual Incentive amounts so everyone falls back to the sheet's Default Amount">🧹 Clear Amounts</button>
         <button class="btn btn-secondary" id="incTemplateBtn" onclick="downloadIncentiveTemplate()" title="Download the Excel format used for bulk upload">📥 Template</button>
         <button class="btn btn-secondary" id="incUploadBtn" onclick="triggerIncentiveUpload()" title="Bulk upload employees from an Excel file">📤 Upload Excel</button>
         <input type="file" id="incUploadInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIncentiveUpload(this)"/>
@@ -521,7 +521,7 @@
         <button class="btn btn-wa" onclick="shareIncentiveWA()">💬 Send via WhatsApp</button>
       </div>
       <div class="toolbar" style="margin-bottom:10px">
-        <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Default Base (₹):
+        <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Default Amount (₹):
           <input type="text" inputmode="decimal" class="numinput" id="incTotalIncentive" style="width:110px"/>
         </label>
         <label class="small" style="margin-left:10px">Days in month:
@@ -543,11 +543,11 @@
               <th style="min-width:110px;width:110px">Incentive Date</th>
               <th>Section</th>
               <th title="Increment added on top of the Base Amount. Type 2 for +2%.">%<br/><span class="small" style="font-weight:normal">increment — 2 = +2%</span></th>
-              <th title="Base Amount plus the % increment. This is the full-month figure before any leave deduction.">Revised<br/><span class="small" style="font-weight:normal">Base + %</span></th>
+              <th title="Actual Incentive plus the % increment — the whole-month figure before leave is deducted.">Calculated<br/><span class="small" style="font-weight:normal">amount + %</span></th>
               <th title="Per Day = (Actual Incentive if typed, otherwise Calculated) ÷ Days in month. This is the rate each leave day is deducted at.">Per Day<br/><span class="small" style="font-weight:normal">÷ days in month</span></th>
               <th>Leave Days</th>
               <th>Present Days</th>
-              <th title="The employee's base amount (e.g. their monthly salary). The % increment is added to this, then leave is deducted per day. Leave blank to use the sheet's Default Base.">Base Amount<br/><span class="small" style="font-weight:normal">₹ before % &amp; leave</span></th>
+              <th title="Enter the employee's amount here. The % increment is added to it, then Leave Days are deducted per day.">Actual Incentive<br/><span class="small" style="font-weight:normal">enter amount here</span></th>
               <th title="Type the whole-month amount here to skip the Base + % calculation. Leave Days are still deducted from it.">Fix Incentive<br/><span class="small" style="font-weight:normal">full-month ₹ · skips %</span></th>
               <th title="A marker only. The incentive is reduced per-day through the Leave Days column, not by this box.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">marker only</div></th>
               <th>Remark</th>
@@ -2764,7 +2764,7 @@ function renderIncentive(){
       e.actualOverride !== "" && e.actualOverride !== null && e.actualOverride !== undefined);
     poolWarn.innerHTML = (num(mData.totalIncentive) > 0 || anyTyped)
       ? ""
-      : "⚠️ Enter a Base Amount per employee, or set a Default Base here.";
+      : "⚠️ Enter an Actual Incentive amount per employee, or set a Default Amount here.";
   }
   // Days + date inputs
   const daysInp = document.getElementById("incDays");
@@ -2806,7 +2806,7 @@ function renderIncentive(){
       <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Base ${Math.round(c.base)} + ${num(emp.pct)}% = ${Math.round(c.calc)} · ÷ ${days} days = ${Math.round(c.perDay)}/day · × ${c.presentDays} present days = ${Math.round(c.final)}. Blank uses the sheet's Default Base. Fix Incentive overrides everything." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="${Math.round(c.base)} + ${num(emp.pct)}% = ${Math.round(c.calc)} · ÷ ${days} days = ${Math.round(c.perDay)}/day · × ${c.presentDays} present days = ${Math.round(c.final)}. Leave blank to use the sheet's Default Amount." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Whole-month amount — replaces Base + %, but Leave Days are still deducted per day." style="background:#fefce8"/></td>
       <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
@@ -2868,13 +2868,13 @@ function clearTypedIncentives(){
   }
   const n = (mData.employees || []).filter(e =>
     e.actualOverride !== "" && e.actualOverride !== null && e.actualOverride !== undefined).length;
-  if (!n){ alert("No per-employee Base Amounts to clear."); return; }
-  if (!confirm("Clear the Base Amount for " + n + " employee" + (n===1?"":"s") +
-               "?\n\nThey will then use the sheet's Default Base instead.")) return;
+  if (!n){ alert("No per-employee amounts to clear."); return; }
+  if (!confirm("Clear the Actual Incentive amount for " + n + " employee" + (n===1?"":"s") +
+               "?\n\nThey will then use the sheet's Default Amount instead.")) return;
   mData.employees.forEach(e => { e.actualOverride = ""; });
   saveAll();
   renderIncentive();
-  flash("🧹 Cleared " + n + " base amount" + (n===1?"":"s") + " — now using the Default Base");
+  flash("🧹 Cleared " + n + " amount" + (n===1?"":"s") + " — now using the Default Amount");
 }
 
 function triggerIncentiveUpload(){
@@ -3026,11 +3026,11 @@ function exportIncentiveExcel(){
   const mData = ensureIncentiveMonth(m);
   const rows = incentiveRows(m);
   const header = ["Name","Incentive","YearMonth","Incentive Date","Section",
-                  "% Increment","Revised (Base + %)","Per Day","Leave Days","Present Days",
-                  "Base Amount","Fix Incentive","Absent","Remark","Final Incentive"];
+                  "% Increment","Calculated (amount + %)","Per Day","Leave Days","Present Days",
+                  "Actual Incentive","Fix Incentive","Absent","Remark","Final Incentive"];
   const aoa = [
     [`RC Employee Incentive — ${m} ${state.currentYear}`],
-    [`Default Base: ${num(mData.totalIncentive)}`, `Days in month: ${num(mData.days)}`],
+    [`Default Amount: ${num(mData.totalIncentive)}`, `Days in month: ${num(mData.days)}`],
     [],
     header
   ];
