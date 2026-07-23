@@ -510,7 +510,7 @@
         </label>
         <span id="incApprovalStatus" class="small"></span>
         <button class="btn btn-primary" id="incAddBtn" onclick="addIncentiveEmployee()">+ Add Employee</button>
-        <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names &amp; codes from another month">📋 Copy Employees</button>
+        <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names from another month">📋 Copy Employees</button>
         <button class="btn btn-secondary" id="incTemplateBtn" onclick="downloadIncentiveTemplate()" title="Download the Excel format used for bulk upload">📥 Template</button>
         <button class="btn btn-secondary" id="incUploadBtn" onclick="triggerIncentiveUpload()" title="Bulk upload employees from an Excel file">📤 Upload Excel</button>
         <input type="file" id="incUploadInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIncentiveUpload(this)"/>
@@ -2511,14 +2511,15 @@ function addIncentiveEmployee(){
   const mData = ensureIncentiveMonth(m);
   if (mData.approved && !isIncentiveApprover()){ alert("This sheet is approved — only an admin / the designated approver can modify it."); return; }
   if (!isIncentiveCreator()){ alert("Only the incentive creator (or a manager / admin) can add employees."); return; }
-  const name = prompt("Employee name:");
-  if (!name || !name.trim()) return;
-  const code = prompt("Employee code / number:", "") || "";
+  // No prompts — just append an empty row the user can type into directly.
   const emp = blankIncentiveEmployee();
-  emp.name = name.trim();
-  emp.code = code.trim();
   mData.employees.push(emp);
   saveAll();
+  // Focus the new row's Name box so typing can start immediately.
+  setTimeout(() => {
+    const el = document.querySelector('#incTable tbody input[data-eid="' + emp.id + '"][data-ef="name"]');
+    if (el){ el.focus(); el.scrollIntoView({block:"center", behavior:"smooth"}); }
+  }, 60);
 }
 function removeIncentiveEmployee(empId){
   const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
@@ -2659,7 +2660,7 @@ function renderIncentive(){
   // Body rows
   const tbody = document.getElementById("incBody");
   if (!mData.employees.length){
-    tbody.innerHTML = `<tr><td colspan="15" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names &amp; codes from another month.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names from another month.</td></tr>`;
     document.getElementById("incTotalRow").innerHTML = "";
     document.getElementById("incTotalPayout").textContent = "";
     return;
@@ -2672,7 +2673,7 @@ function renderIncentive(){
     const finalCls = emp.absent ? "badge-bad" : "badge-good";
     const pctDisp = emp.pct;  // shown as decimal
     html += `<tr${emp.absent?' style="background:#fef2f2"':''}>
-      <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
+      <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} placeholder="Employee name" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td class="derived-cell ${finalCls}"><b>${fmt(c.final)}</b></td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${ym}</td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
