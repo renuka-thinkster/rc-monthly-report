@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        <b>Final Incentive</b> = Absent → 0 · else Fix Incentive (if set) · else Mgr Override (if set) · else Pro-rated.
+        <b>Final Incentive</b> = Fix Incentive (if set) · else Mgr Override (if set) · else Pro-rated. <b>Absent</b> is only a marker — money is reduced per-day through <b>Leave Days</b> (for a whole month off, set Leave Days = days in month).
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -548,7 +548,7 @@
               <th>Present Days</th>
               <th>Actual Incentive<br/><span class="small" style="font-weight:normal">PerDay × Present · editable</span></th>
               <th>Fix Incentive</th>
-              <th title="Ticked = the employee forfeits the WHOLE month's incentive (₹0). For part-month leave use the Leave Days column instead.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">whole month → ₹0</div></th>
+              <th title="A marker only. The incentive is reduced per-day through the Leave Days column, not by this box.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">marker only</div></th>
               <th>Remark</th>
               <th></th>
             </tr>
@@ -2591,9 +2591,13 @@ function incentiveCalc(emp, monthDays, monthTotalIncentive){
   const hasOverride = emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined;
   const actualIncentive = hasOverride ? Math.round(num(emp.actualOverride)) : computedActual;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
+  // NOTE: "Absent" is now only a MARKER. It does NOT wipe the incentive.
+  // The money is reduced purely per-day via Leave Days:
+  //     Per Day = Calculated ÷ days in month
+  //     Final   = Per Day × (days − Leave Days)
+  // For a full-month absence, set Leave Days = days in month → Final = 0.
   let final;
-  if (emp.absent) final = 0;
-  else if (hasFix) final = Math.round(num(emp.fixIncentive));
+  if (hasFix) final = Math.round(num(emp.fixIncentive));
   else final = actualIncentive;
   return { calc, perDay, presentDays, computedActual, actualIncentive, final: Math.round(final), hasFix, hasOverride };
 }
@@ -2790,7 +2794,7 @@ function renderIncentive(){
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Per Day × Present Days = ${Math.round(c.computedActual)}. Admin/manager can type here to round off." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
-      <td style="text-align:center" ${(emp.absent && num(emp.leaveDays)>0) ? 'title="This employee has Leave Days entered AND is marked Absent — Absent wins, so the incentive is ₹0. Untick Absent if you only meant part-month leave."' : ''}><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)>0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Absent overrides leave">⚠ overrides leave</div>' : ''}</td>
+      <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td>${(canCreator) ? `<button class="btn btn-danger" style="padding:3px 7px;font-size:11px" onclick="removeIncentiveEmployee('${emp.id}')" title="Remove employee">🗑️</button>` : ''}</td>
     </tr>`;
