@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        <b>Final Incentive</b> = Fix Incentive (if set) · else Mgr Override (if set) · else Pro-rated. <b>Absent</b> is only a marker — money is reduced per-day through <b>Leave Days</b> (for a whole month off, set Leave Days = days in month).
+        <b>Final Incentive</b> = Fix Incentive (exact, no deduction) · else <b>Actual Incentive</b> (type the full-month figure — Leave Days are deducted per day) · else the pool-derived pro-rated amount. <b>Absent</b> is only a marker — money is reduced through <b>Leave Days</b> (for a whole month off set Leave Days = days in month).
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -546,7 +546,7 @@
               <th>Per Day<br/><span class="small" style="font-weight:normal">Calc ÷ days</span></th>
               <th>Leave Days</th>
               <th>Present Days</th>
-              <th>Actual Incentive<br/><span class="small" style="font-weight:normal">PerDay × Present · editable</span></th>
+              <th title="Type the employee's FULL-MONTH incentive here — Leave Days are then deducted per day.">Actual Incentive<br/><span class="small" style="font-weight:normal">full-month ₹ · leave deducted</span></th>
               <th>Fix Incentive</th>
               <th title="A marker only. The incentive is reduced per-day through the Leave Days column, not by this box.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">marker only</div></th>
               <th>Remark</th>
@@ -2582,14 +2582,24 @@ function ensureIncentiveMonth(m){
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
   const days = num(monthDays) || 30;
   const calc = Math.round(num(monthTotalIncentive) * num(emp.pct) / 100);   // Total × emp% ÷ 100
-  const perDayRaw = days > 0 ? calc / days : 0;                             // keep full precision here
-  const perDay = Math.round(perDayRaw);                                     // shown / exported as a whole ₹
   const presentDays = Math.max(0, days - num(emp.leaveDays));
+  const _ovRaw = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
+    ? num(emp.actualOverride) : null;
+  // Per-day rate: from the typed full-month amount when one is entered,
+  // otherwise from the pool-derived Calculated figure.
+  const perDayRaw = days > 0 ? ((_ovRaw !== null ? _ovRaw : calc) / days) : 0;
+  const perDay = Math.round(perDayRaw);
   // Pro-rate from the UNROUNDED per-day rate, then round once at the end, so
   // rounding never compounds across the month.
-  const computedActual = Math.round(perDayRaw * presentDays);
-  const hasOverride = emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined;
-  const actualIncentive = hasOverride ? Math.round(num(emp.actualOverride)) : computedActual;
+  const computedActual = Math.round((days > 0 ? calc / days : 0) * presentDays);
+  const hasOverride = _ovRaw !== null;
+  // A typed "Actual Incentive" is the employee's FULL-MONTH entitlement, so it
+  // is pro-rated by Leave Days just like a pool-derived amount:
+  //   ₹50,000 over 30 days with 2 days leave -> 50000 ÷ 30 × 28 = ₹46,667
+  // (Use "Fix Incentive" for an exact amount with no deduction.)
+  const actualIncentive = hasOverride
+    ? Math.round(days > 0 ? (_ovRaw / days) * presentDays : _ovRaw)
+    : computedActual;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
   // NOTE: "Absent" is now only a MARKER. It does NOT wipe the incentive.
   // The money is reduced purely per-day via Leave Days:
@@ -2792,7 +2802,7 @@ function renderIncentive(){
       <td class="derived-cell" title="Calculated ÷ ${days} days">${fmt(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Per Day × Present Days = ${Math.round(c.computedActual)}. Admin/manager can type here to round off." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Type the FULL-MONTH incentive here; Leave Days are deducted per day. Now: ${Math.round(c.perDay)}/day × ${c.presentDays} present days = ${Math.round(c.actualIncentive)}. For an exact amount with no deduction use Fix Incentive." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Fix amount — supersedes all calculation" style="background:#fefce8"/></td>
       <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
