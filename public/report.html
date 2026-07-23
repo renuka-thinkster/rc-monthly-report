@@ -2759,6 +2759,94 @@ function renderIncentive(){
     <td colspan="13"></td>`;
   document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt(totalPayout)}`;
 }
+
+// ── EMPLOYEE BULK UPLOAD (Excel) ──────────────────────────────────
+const INC_TEMPLATE_COLS = ["Name","Section","% Incentive","Leave Days","Absent","Remark"];
+
+function downloadIncentiveTemplate(){
+  if (typeof XLSX === "undefined"){ alert("Excel library still loading — try again in a moment."); return; }
+  const aoa = [
+    INC_TEMPLATE_COLS,
+    ["Yasin Shek","Kitchen",12,0,"No",""],
+    ["Sample Name","Counter",8,2,"No","example row — delete before uploading"]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{wch:24},{wch:14},{wch:13},{wch:11},{wch:9},{wch:34}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Employees");
+  XLSX.writeFile(wb, "RC_Employee_Upload_Template.xlsx");
+}
+
+function triggerIncentiveUpload(){
+  const el = document.getElementById("incUploadInput");
+  if (el){ el.value = ""; el.click(); }
+}
+
+function handleIncentiveUpload(input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (typeof XLSX === "undefined"){ alert("Excel library still loading — try again in a moment."); return; }
+  const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
+  const mData = ensureIncentiveMonth(m);
+  if (!incentiveCanEdit(mData, "creator")){
+    alert("This sheet is approved / locked. Re-open it before uploading employees.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let rows;
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: "array" });
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+    } catch (err){
+      alert("Could not read that file. Please upload a .xlsx, .xls or .csv file.");
+      return;
+    }
+    if (!rows.length){ alert("That file has no rows."); return; }
+
+    // Validate: a Name column must exist, otherwise offer the correct template.
+    const foundCols = Object.keys(rows[0]);
+    const lower = foundCols.map(k => String(k).trim().toLowerCase());
+    const hasName = lower.some(k => k === "name" || k === "employee name" || k === "employee");
+    if (!hasName){
+      const msg = "This file does not match the required format.\n\n"
+        + "Required columns:\n   " + INC_TEMPLATE_COLS.join("\n   ")
+        + "\n\nColumns found in your file:\n   " + foundCols.join("\n   ")
+        + "\n\nClick OK to download the correct template.";
+      if (confirm(msg)) downloadIncentiveTemplate();
+      return;
+    }
+
+    const pick = (row, names) => {
+      for (const key of Object.keys(row)){
+        if (names.includes(String(key).trim().toLowerCase())) return row[key];
+      }
+      return "";
+    };
+    let added = 0, skipped = 0;
+    rows.forEach(row => {
+      const name = String(pick(row, ["name","employee name","employee"])).trim();
+      if (!name){ skipped++; return; }
+      const emp = blankIncentiveEmployee();
+      emp.name = name;
+      const sec = String(pick(row, ["section","dept","department"])).trim();
+      emp.section = INCENTIVE_SECTIONS.includes(sec) ? sec : "Kitchen";
+      emp.pct = num(pick(row, ["% incentive","%","pct","percent","incentive %"]));
+      emp.leaveDays = num(pick(row, ["leave days","leave","leaves"]));
+      const abs = String(pick(row, ["absent"])).trim().toLowerCase();
+      emp.absent = (abs === "yes" || abs === "y" || abs === "true" || abs === "1");
+      emp.remark = String(pick(row, ["remark","remarks","note","notes"])).trim();
+      mData.employees.push(emp);
+      added++;
+    });
+    saveAll(true);
+    renderIncentive();
+    alert("✅ " + added + " employee" + (added===1?"":"s") + " added"
+      + (skipped ? "  ·  " + skipped + " row" + (skipped===1?"":"s") + " skipped (no name)" : "") + ".");
+  };
+  reader.readAsArrayBuffer(file);
+}
+  
 // Copy base employee info (name, code, section, %) from another month into the current month.
 function copyIncentiveEmployees(){
   const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
