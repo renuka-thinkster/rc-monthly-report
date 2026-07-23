@@ -1369,6 +1369,7 @@ async function loadState(){
   state.editMode = !!payload.editMode;
   if (!state.auth) state.auth = { users:{}, authorizedEmails:[], session:null, incentiveRoles:{ approver:"", creator:"" } };
   state.auth.incentiveRoles = payload.incentiveRoles || { approver:"", creator:"" };
+  state.auth.vendorPayout   = payload.vendorSettings  || { approverPhone:"" };
 
   bindUnit(state.currentUnit);
   if (!state.years[state.currentYear]) state.years[state.currentYear] = makeYearData(state.currentYear);
@@ -1511,6 +1512,7 @@ function _persistData(){
     data.currentYear    = state.currentYear;
     data.editMode       = !!state.editMode;
     data.incentiveRoles = (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" };
+    data.vendorSettings = (state.auth && state.auth.vendorPayout)   || { approverPhone:"" };
   } catch(e){ console.error('state passthrough failed', e); }
   return fetch('/api/data', {
     method: 'PUT',
