@@ -1251,9 +1251,22 @@ function storeToUnits(S){
   }
   const incentive={};
   for (const k of Object.keys(S.incentive||{})){
-    const emps=(S.incentive[k]||[]).map(e=>({name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
-      pct:(_n(e.pct)||0)/100, leaveDays:_n(e.leave), absent:!!e.absent, fixIncentive:e.fixInc||'', actualOverride:e.mgrOverride||'', remark:''}));
-    incentive[_name(k)]={days:30,approved:false,employees:emps,approvedAt:null,approvedBy:'',incentiveDate:`${k}-28`,totalIncentive:0};
+    const emps=(S.incentive[k]||[]).map((e,ei)=>({
+      // An id is REQUIRED — the table keys every edit by data-eid. Legacy rows
+      // had none, so all edits landed on the first row.
+      id: e.id || ("emp_" + k + "_" + ei + "_" + Math.floor(Math.random()*100000)),
+      name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
+      pct:(_n(e.pct)||0)/100, leaveDays:_n(e.leave), absent:!!e.absent,
+      fixIncentive:e.fixInc||'', actualOverride:e.mgrOverride||'', remark:e.remark||''}));
+    const _im=(S.incentiveMeta||{})[k]||{};
+    incentive[_name(k)]={
+      days:_n(_im.days)||30,
+      approved:!!_im.approved,
+      employees:emps,
+      approvedAt:_im.approvedAt||null,
+      approvedBy:_im.approvedBy||'',
+      incentiveDate:_im.incentiveDate||`${k}-28`,
+      totalIncentive:_n(_im.totalIncentive)};
   }
 
   const year2026={ mn, rc:{inv,pur,tgt,sales},
@@ -1307,9 +1320,17 @@ function unitsToStore(state){
     if(arr.length) S.cons[k]=arr;
   }
   for (const m of Object.keys(y.incentive||{})){
-    const k=_key(m), inc=y.incentive[m]||{}; const emps=(inc.employees||[]).map(e=>({name:e.name||'',code:e.code||'',section:e.section||'Kitchen',
-      pct:Math.round((_n(e.pct)||0)*100), leave:_n(e.leaveDays), absent:!!e.absent, fixInc:e.fixIncentive||'', mgrOverride:e.actualOverride||'', actualInc:''}));
+    const k=_key(m), inc=y.incentive[m]||{}; const emps=(inc.employees||[]).map(e=>({
+      id:e.id||'', name:e.name||'', code:e.code||'', section:e.section||'Kitchen',
+      pct:Math.round((_n(e.pct)||0)*100), leave:_n(e.leaveDays), absent:!!e.absent,
+      fixInc:e.fixIncentive||'', mgrOverride:e.actualOverride||'', actualInc:'',
+      remark:e.remark||''}));
     if(emps.length) S.incentive[k]=emps;
+    // month-level settings the old array shape had nowhere to put
+    (S.incentiveMeta = S.incentiveMeta || {})[k] = {
+      days:_n(inc.days)||30, totalIncentive:_n(inc.totalIncentive),
+      incentiveDate:inc.incentiveDate||'', approved:!!inc.approved,
+      approvedBy:inc.approvedBy||'', approvedAt:inc.approvedAt||null };
   }
   return S;
 }
@@ -1477,7 +1498,20 @@ function isEditingInput(){
 }
 let _saveTimer = null;
 function _persistData(){
-  const data = __RCADAPT.unitsToStore(state);  // write OLD store format to Neon (DB structure unchanged)
+  // Legacy "store" projection — kept so the DB shape never changes.
+  const data = __RCADAPT.unitsToStore(state);
+  // FULL-FIDELITY passthrough. The legacy projection above silently drops
+  // several things (incentive pool / days / date / approval / remark / row ids,
+  // vendor payouts, hidden-store choices, incentive role designations, ...).
+  // Writing the real state alongside it means NOTHING can be lost on a save,
+  // and loadState() prefers `units` when present, so reloads are exact.
+  try {
+    data.units          = state.units;
+    data.currentUnit    = state.currentUnit;
+    data.currentYear    = state.currentYear;
+    data.editMode       = !!state.editMode;
+    data.incentiveRoles = (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" };
+  } catch(e){ console.error('state passthrough failed', e); }
   return fetch('/api/data', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
