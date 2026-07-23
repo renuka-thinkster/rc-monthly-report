@@ -502,7 +502,7 @@
         <b>Creator</b> adds employees, sets Leave days, marks Absent (+ Remark), and can set a <b>Fix Incentive</b> (overrides all calculation).
         <b>Manager</b> enters <b>Total Incentive</b> pool &amp; <b>%</b>, and can round-off via <b>Mgr Override</b>.<br/>
         Incentive = Total × % · Per Day = Incentive ÷ days in month · Paid Days = days − Leave · Pro-rated = Per Day × Paid Days.<br/>
-        <b>Calculated</b> = Total Incentive pool × employee <b>%</b> ÷ 100. <b>Per Day</b> = Calculated ÷ Days in month. <b>Incentive</b> = Per Day × Present Days (Days − Leave Days). <i>Example: pool ₹50,000, 2% → ₹1,000 · ÷30 = ₹33.33/day · 2 days leave → 33.33 × 28 = <b>₹933</b>.</i> <b>Actual Incentive</b> and <b>Fix Incentive</b> are optional whole-month overrides — leave is still deducted from them. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
+        <b>Calculated</b> = <b>Actual Incentive</b> × employee <b>%</b> ÷ 100. <b>Per Day</b> = Calculated ÷ Days in month. <b>Incentive</b> = Per Day × Present Days (Days − Leave Days). <i>Example: Actual Incentive ₹50,000, 2% → ₹1,000.00 · ÷30 = ₹33.33/day · 2 days leave → <b>₹933.33</b>.</i> Leave an Actual Incentive blank to fall back to the sheet's <b>Total Incentive</b> figure. <b>Fix Incentive</b> replaces the calculation — leave is still deducted from it. <b>Absent</b> is a marker only — for a whole month off set Leave Days = days in month.
         Once <b>✅ Approved</b> by an admin, the sheet is locked — only an admin can modify it.
       </div>
       <div class="toolbar" style="margin-bottom:8px">
@@ -543,11 +543,11 @@
               <th style="min-width:110px;width:110px">Incentive Date</th>
               <th>Section</th>
               <th title="This employee's share of the Total Incentive pool. Type 2 for 2%.">%<br/><span class="small" style="font-weight:normal">whole no. — 2 = 2%</span></th>
-              <th title="Total Incentive pool × this employee's % ÷ 100 — the whole-month figure before leave is deducted.">Calculated<br/><span class="small" style="font-weight:normal">pool × % ÷ 100</span></th>
+              <th title="Actual Incentive × this employee's % ÷ 100 — the whole-month figure before leave is deducted.">Calculated<br/><span class="small" style="font-weight:normal">amount × % ÷ 100</span></th>
               <th title="Per Day = (Actual Incentive if typed, otherwise Calculated) ÷ Days in month. This is the rate each leave day is deducted at.">Per Day<br/><span class="small" style="font-weight:normal">÷ days in month</span></th>
               <th>Leave Days</th>
               <th>Present Days</th>
-              <th title="Optional. Type a whole-month amount here to replace the pool × % figure. Leave Days are still deducted from it.">Actual Incentive<br/><span class="small" style="font-weight:normal">optional override</span></th>
+              <th title="The amount the % is applied to. Leave blank to use the sheet's Total Incentive figure.">Actual Incentive<br/><span class="small" style="font-weight:normal">amount the % applies to</span></th>
               <th title="Type the whole-month amount here to skip the Base + % calculation. Leave Days are still deducted from it.">Fix Incentive<br/><span class="small" style="font-weight:normal">full-month ₹ · skips %</span></th>
               <th title="A marker only. The incentive is reduced per-day through the Leave Days column, not by this box.">Absent<div class="small" style="font-weight:normal;color:var(--muted)">marker only</div></th>
               <th>Remark</th>
@@ -2585,36 +2585,35 @@ function ensureIncentiveMonth(m){
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
   // ── HOW AN INCENTIVE IS WORKED OUT ───────────────────────────────
-  //   Calculated    = Total Incentive pool × employee % ÷ 100
+  //   Amount        = the employee's "Actual Incentive" (falls back to the
+  //                   sheet's Total Incentive when that cell is empty)
+  //   Calculated    = Amount × employee % ÷ 100
   //   Per Day       = Calculated ÷ Days in month
   //   Present Days  = Days in month − Leave Days
   //   Incentive     = Per Day × Present Days
   //
-  //   e.g. pool 50,000 · 2% · 30-day month · 2 days leave
+  //   e.g. Actual Incentive 50,000 · 2% · 30-day month · 2 days leave
   //        Calculated = 50,000 × 2 ÷ 100 = 1,000.00
   //        Per Day    = 1,000 ÷ 30       =    33.33   (exact 33.333333…)
   //        Incentive  = 33.333333… × 28  =   933.33
   //
-  //   Amounts are kept at full precision and rounded to 2 decimals only for
-  //   display, so the per-day rounding never compounds across the month.
-  //   "Actual Incentive" (if typed) replaces the pool × % figure.
-  //   "Fix Incentive"    (if typed) replaces both.
-  //   Leave Days are ALWAYS deducted, whichever figure is used.
+  //   Full precision is carried through and only rounded to 2 decimals for
+  //   display, so per-day rounding never compounds across the month.
+  //   "Fix Incentive" (if typed) replaces the whole calculation, but Leave
+  //   Days are still deducted from it.
   const r2 = v => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
   const days = num(monthDays) || 30;
   const typed = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
     ? num(emp.actualOverride) : null;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
-  const base = num(monthTotalIncentive);
-  let calcRaw;
-  if (hasFix)              calcRaw = num(emp.fixIncentive);
-  else if (typed !== null) calcRaw = typed;
-  else                     calcRaw = base * num(emp.pct) / 100;
+  // The amount the % is applied to.
+  const base = (typed !== null) ? typed : num(monthTotalIncentive);
+  const calcRaw = hasFix ? num(emp.fixIncentive) : (base * num(emp.pct) / 100);
   const calc = r2(calcRaw);
   const perDayRaw = days > 0 ? calcRaw / days : 0;      // full precision
-  const perDay = r2(perDayRaw);                         // 33.33
+  const perDay = r2(perDayRaw);
   const presentDays = Math.max(0, days - num(emp.leaveDays));
-  const computedActual = r2(perDayRaw * presentDays);   // 933.33
+  const computedActual = r2(perDayRaw * presentDays);
   const hasOverride = typed !== null;
   const actualIncentive = computedActual;
   // "Absent" is a marker only — the deduction comes from Leave Days.
@@ -2775,7 +2774,7 @@ function renderIncentive(){
       e.actualOverride !== "" && e.actualOverride !== null && e.actualOverride !== undefined);
     poolWarn.innerHTML = (num(mData.totalIncentive) > 0 || anyTyped)
       ? ""
-      : "⚠️ Enter the Total Incentive pool — each employee's incentive is a % of it.";
+      : "⚠️ Enter an Actual Incentive amount per employee (or a Total Incentive here as the default).";
   }
   // Days + date inputs
   const daysInp = document.getElementById("incDays");
@@ -2813,11 +2812,11 @@ function renderIncentive(){
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
       <td><select data-eid="${emp.id}" data-ef="section" ${cDis} style="padding:4px;font-size:11.5px">${INCENTIVE_SECTIONS.map(s=>`<option ${s===emp.section?"selected":""}>${s}</option>`).join("")}</select></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${pctDisp}" data-eid="${emp.id}" data-ef="pct" ${mDis} title="Whole number — type 12 for 12%" placeholder="e.g. 12"/></td>
-      <td class="derived-cell" title="Total Incentive pool × % ÷ 100">${fmt2(c.calc)}</td>
+      <td class="derived-cell" title="${Math.round(c.base)} × ${num(emp.pct)}% ÷ 100">${fmt2(c.calc)}</td>
       <td class="derived-cell" title="Calculated ÷ ${days} days (exact ${c.perDayRaw.toFixed(4)})">${fmt2(c.perDay)}</td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.leaveDays}" data-eid="${emp.id}" data-ef="leaveDays" ${cDis}/></td>
       <td class="derived-cell" title="${days} − Leave Days">${c.presentDays}</td>
-      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="Whole-month ${Math.round(c.calc)} ÷ ${days} days = ${c.perDayRaw.toFixed(2)}/day · × ${c.presentDays} present days = ${Math.round(c.final)}. Leave blank to use pool × %." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
+      <td><input type="text" inputmode="decimal" class="numinput" value="${emp.actualOverride}" data-eid="${emp.id}" data-ef="actualOverride" ${mDis} placeholder="${Math.round(c.computedActual)}" title="${Math.round(c.base)} × ${num(emp.pct)}% = ${c.calc} · ÷ ${days} days = ${c.perDayRaw.toFixed(2)}/day · × ${c.presentDays} present days = ${c.final}. Leave blank to use the sheet's Total Incentive." style="${c.hasOverride?'background:#fef3c7;font-weight:600':''}"/></td>
       <td><input type="text" inputmode="decimal" class="numinput" value="${emp.fixIncentive}" data-eid="${emp.id}" data-ef="fixIncentive" ${cDis} placeholder="—" title="Whole-month amount — replaces Base + %, but Leave Days are still deducted per day." style="background:#fefce8"/></td>
       <td style="text-align:center" title="Marker only — the deduction comes from Leave Days."><input type="checkbox" data-eid="${emp.id}" data-ef="absent" ${emp.absent?"checked":""} ${cDis}/>${(emp.absent && num(emp.leaveDays)===0) ? '<div class="small" style="color:#b45309;font-weight:700" title="Marked absent but no Leave Days entered — nothing will be deducted.">⚠ set Leave Days</div>' : ''}</td>
       <td><input type="text" value="${(emp.remark||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="remark" ${cDis} placeholder="reason if absent" style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
@@ -3037,7 +3036,7 @@ function exportIncentiveExcel(){
   const mData = ensureIncentiveMonth(m);
   const rows = incentiveRows(m);
   const header = ["Name","Incentive","YearMonth","Incentive Date","Section",
-                  "% Share","Calculated (pool × %)","Per Day","Leave Days","Present Days",
+                  "% Share","Calculated (amount × %)","Per Day","Leave Days","Present Days",
                   "Actual Incentive","Fix Incentive","Absent","Remark","Final Incentive"];
   const aoa = [
     [`RC Employee Incentive — ${m} ${state.currentYear}`],
