@@ -511,6 +511,9 @@
         <span id="incApprovalStatus" class="small"></span>
         <button class="btn btn-primary" id="incAddBtn" onclick="addIncentiveEmployee()">+ Add Employee</button>
         <button class="btn btn-secondary" id="incCopyBtn" onclick="copyIncentiveEmployees()" title="Copy employee names &amp; codes from another month">📋 Copy Employees</button>
+        <button class="btn btn-secondary" id="incTemplateBtn" onclick="downloadIncentiveTemplate()" title="Download the Excel format used for bulk upload">📥 Template</button>
+        <button class="btn btn-secondary" id="incUploadBtn" onclick="triggerIncentiveUpload()" title="Bulk upload employees from an Excel file">📤 Upload Excel</button>
+        <input type="file" id="incUploadInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIncentiveUpload(this)"/>
         <button class="btn btn-secondary" id="incApproveBtn" onclick="toggleIncentiveApproval()"></button>
         <button class="btn btn-secondary" onclick="exportIncentiveExcel()">📥 Download Excel</button>
         <button class="btn btn-wa" onclick="shareIncentiveWA()">💬 Send via WhatsApp</button>
@@ -532,7 +535,6 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>Emp Code</th>
               <th>Incentive</th>
               <th style="min-width:110px;width:110px">Year-Month</th>
               <th style="min-width:110px;width:110px">Incentive Date</th>
@@ -1741,7 +1743,6 @@ function renderPurchase(){
 /*  RENDER — ④ FOOD COST (auto)                                             */
 /* ====================================================================== */
 function renderFoodCost(){
-  syncSalesFromDaily();
   const monthRowEl = document.getElementById("fcMonthRow");
   const subRowEl = document.getElementById("fcSubRow");
   const body = document.getElementById("fcBody");
@@ -1862,7 +1863,6 @@ function renderTargets(){
 /*  RENDER — MONTHLY INPUT                                                 */
 /* ====================================================================== */
 function renderMonthlyInput(){
-  syncSalesFromDaily();
   const tbody = document.getElementById("miBody");
   let html = "";
   let tS=0,tP=0,tF=0,tSF=0,tD=0,tM=0,tOI=0,tNP=0;
@@ -1903,7 +1903,6 @@ function renderMonthlyInput(){
 /*  RENDER — YEARLY SUMMARY                                                */
 /* ====================================================================== */
 function renderYearly(){
-  syncSalesFromDaily();
   // Populate "Start From" picker for the CURRENT year (other years use their own stored value)
   const startPicker = document.getElementById("ysStartPicker");
   if (startPicker){
@@ -2077,7 +2076,6 @@ function addTodayAndGo(){
 }
 
 function renderDashboard(){
-  syncSalesFromDaily();
   // Head KPIs (YTD)
   let tS=0,tP=0,tF=0,tNP=0,tSF=0,tD=0,tM=0;
   MONTHS.forEach(m=>{ const r=monthRow(m); tS+=r.sales; tP+=r.purchase; tF+=r.fc; tNP+=r.np; tSF+=r.sf; tD+=r.dump; tM+=r.mt; });
@@ -2363,51 +2361,6 @@ function storeAchievedFromDaily(m, s, asOfDate){
   });
   return total;
 }
-
-// ══════════════════════════════════════════════════════════════════════
-// AUTO-ROLLUP:  Daily Sales  →  monthly Sales sheet
-// Whatever is entered in Daily Sales is summed per store per month and
-// written into that store's "Dine Amt" cell on the Sales sheet. Every
-// derived view (Food Cost %, Monthly Input, Yearly, Dashboard, WhatsApp)
-// already reads from the Sales sheet, so the whole chain becomes automatic.
-//
-// SAFETY: a month with NO daily entries is never touched — that protects
-// Jan–Apr (and any month you key in by hand before Daily Sales exists).
-// "Events" has no Daily counterpart, so it always stays manual.
-// ══════════════════════════════════════════════════════════════════════
-function dailyStoreTotal(m, s){
-  if (!state.daily || !state.daily.entries) return 0;
-  const unit = STORE_TO_DAILY_UNIT[s];
-  if (!unit) return 0;                       // Events / custom sites: no daily mapping
-  const monthIdx = MONTHS.indexOf(m);
-  let total = 0;
-  state.daily.entries.forEach(e => {
-    if (!e.date) return;
-    if (+e.date.slice(0,4) !== state.currentYear) return;
-    if (+e.date.slice(5,7) - 1 !== monthIdx) return;
-    if (unit === "cafe")           total += num(e.cafe.upi) + num(e.cafe.online) + num(e.cafe.cash);
-    else if (unit === "rcExpress") total += num(e.rcExpress.upi) + num(e.rcExpress.cash);
-    else if (unit === "truck")     total += num(e.truck.upi) + num(e.truck.cash);
-    else if (unit === "tcs")       total += num(e.tcs.t1) + num(e.tcs.t2);
-  });
-  return total;
-}
-
-// Push the daily totals into the monthly Sales sheet. Daily is the source of
-// truth for the Dine Amt column; Home Delivery / Credit / FOC stay manual.
-function syncSalesFromDaily(){
-  if (!state || !state.rc || !state.rc.sales) return;
-  if (!state.daily || !Array.isArray(state.daily.entries)) return;
-  MONTHS.forEach(m => {
-    if (daysEnteredInMonth(m) === 0) return;       // no daily data → leave month alone
-    if (!state.rc.sales[m]) return;
-    STORES.forEach(s => {
-      if (STORE_TO_DAILY_UNIT[s] === null) return; // Events stays manual
-      if (!state.rc.sales[m][s]) return;
-      state.rc.sales[m][s].dineAmt = dailyStoreTotal(m, s);
-    });
-  });
-}
 // Count daily entries within the given month, optionally up to (and including) a cutoff date.
 function daysEnteredInMonth(m, asOfDate){
   if (!state.daily || !state.daily.entries) return 0;
@@ -2678,6 +2631,8 @@ function renderIncentive(){
   const addBtn = document.getElementById("incAddBtn");
   if (addBtn) addBtn.disabled = !canCreator;
   const copyBtn = document.getElementById("incCopyBtn");
+  const upBtn = document.getElementById("incUploadBtn");
+  if (upBtn) upBtn.disabled = !canCreator;
   if (copyBtn) copyBtn.disabled = !canCreator;
 
   // Shared Total Incentive pool (manager)
@@ -2704,7 +2659,7 @@ function renderIncentive(){
   // Body rows
   const tbody = document.getElementById("incBody");
   if (!mData.employees.length){
-    tbody.innerHTML = `<tr><td colspan="16" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names &amp; codes from another month.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="small" style="text-align:center;color:var(--muted);padding:18px">No employees yet. Click <b>+ Add Employee</b>, or <b>📋 Copy Employees</b> to bring names &amp; codes from another month.</td></tr>`;
     document.getElementById("incTotalRow").innerHTML = "";
     document.getElementById("incTotalPayout").textContent = "";
     return;
@@ -2718,7 +2673,6 @@ function renderIncentive(){
     const pctDisp = emp.pct;  // shown as decimal
     html += `<tr${emp.absent?' style="background:#fef2f2"':''}>
       <td><input type="text" value="${(emp.name||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="name" ${cDis} style="width:130px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
-      <td><input type="text" value="${(emp.code||'').replace(/"/g,'&quot;')}" data-eid="${emp.id}" data-ef="code" ${cDis} style="width:100px;padding:4px;border:1px solid var(--line);border-radius:4px;font-size:12px"/></td>
       <td class="derived-cell ${finalCls}"><b>${fmt(c.final)}</b></td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${ym}</td>
       <td class="derived-cell" style="min-width:110px;width:110px;text-align:center">${mData.incentiveDate||"—"}</td>
@@ -2754,13 +2708,15 @@ function renderIncentive(){
   });
   // Total row
   document.getElementById("incTotalRow").innerHTML = `
-    <td colspan="2"><b>TOTAL — ${mData.employees.length} employee${mData.employees.length===1?"":"s"}</b></td>
+    <td><b>TOTAL — ${mData.employees.length} employee${mData.employees.length===1?"":"s"}</b></td>
     <td><b>${fmt(totalPayout)}</b></td>
     <td colspan="13"></td>`;
   document.getElementById("incTotalPayout").textContent = `Total Payout: ${fmt(totalPayout)}`;
 }
-
-// ── EMPLOYEE BULK UPLOAD (Excel) ──────────────────────────────────
+// Copy base employee info (name, code, section, %) from another month into the current month.
+// ══════════════════════════════════════════════════════════════════
+// EMPLOYEE BULK UPLOAD (Excel)  — template download + validated import
+// ══════════════════════════════════════════════════════════════════
 const INC_TEMPLATE_COLS = ["Name","Section","% Incentive","Leave Days","Absent","Remark"];
 
 function downloadIncentiveTemplate(){
@@ -2841,13 +2797,32 @@ function handleIncentiveUpload(input){
     });
     saveAll(true);
     renderIncentive();
-    alert("✅ " + added + " employee" + (added===1?"":"s") + " added"
-      + (skipped ? "  ·  " + skipped + " row" + (skipped===1?"":"s") + " skipped (no name)" : "") + ".");
+    alert("\u2705 " + added + " employee" + (added===1?"":"s") + " added"
+      + (skipped ? "  \u00b7  " + skipped + " row" + (skipped===1?"":"s") + " skipped (no name)" : "") + ".");
   };
   reader.readAsArrayBuffer(file);
 }
-  
-// Copy base employee info (name, code, section, %) from another month into the current month.
+
+// ══════════════════════════════════════════════════════════════════
+// AUTO-ROLLUP: Daily Sales  →  monthly Sales sheet
+// Writes each unit's daily total into that month's "Dine Amt" cell so the
+// Sales sheet — and Food Cost, Monthly Input, Yearly Summary, Dashboard —
+// always reflect Daily Sales. Months with NO daily entries are left alone,
+// which keeps hand-entered history (Jan–Apr) safe.
+// ══════════════════════════════════════════════════════════════════
+function syncSalesFromDaily(){
+  if (!state.daily || !Array.isArray(state.daily.entries)) return;
+  if (!state.rc || !state.rc.sales) return;
+  MONTHS.forEach(m => {
+    if (daysEnteredInMonth(m) === 0) return;      // no daily data → skip month
+    STORES.forEach(s => {
+      if (STORE_TO_DAILY_UNIT[s] === null) return; // Events: no daily source
+      if (!state.rc.sales[m] || !state.rc.sales[m][s]) return;
+      state.rc.sales[m][s].dineAmt = storeAchievedFromDaily(m, s);
+    });
+  });
+}
+
 function copyIncentiveEmployees(){
   const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
   const mData = ensureIncentiveMonth(m);
@@ -2906,7 +2881,7 @@ function exportIncentiveExcel(){
   const m = document.getElementById("incMonthPicker").value || CURRENT_MONTH;
   const mData = ensureIncentiveMonth(m);
   const rows = incentiveRows(m);
-  const header = ["Name","Employee Code","Incentive","YearMonth","Incentive Date","Section",
+  const header = ["Name","Incentive","YearMonth","Incentive Date","Section",
                   "% Incentive","Calculated (Total×%)","Per Day","Leave Days","Present Days",
                   "Actual Incentive","Fix Incentive","Absent","Remark","Final Incentive"];
   const aoa = [
@@ -2916,13 +2891,13 @@ function exportIncentiveExcel(){
     header
   ];
   rows.forEach(r => aoa.push([
-    r.name, r.code, r.final, r.ym, r.date, r.section,
+    r.name, r.final, r.ym, r.date, r.section,
     r.pct, r.calc, r.perDay, r.leave, r.presentDays,
     r.actual, r.fix, r.absent ? "Yes" : "No", r.remark, r.final
   ]));
   const totalPayout = rows.reduce((s,r)=> s + r.final, 0);
   aoa.push([]);
-  aoa.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOTAL", totalPayout]);
+  aoa.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "TOTAL", totalPayout]);
   if (mData.approved) aoa.push([`Approved by ${mData.approvedBy} on ${mData.approvedAt? new Date(mData.approvedAt).toLocaleDateString() : ""}`]);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
@@ -4184,7 +4159,6 @@ function resetData(){
 /*  WHATSAPP SHARE                                                         */
 /* ====================================================================== */
 function buildSummaryText(m){
-  syncSalesFromDaily();
   const r = monthRow(m);
   // Tabular helpers — WhatsApp renders triple-backtick blocks in monospaced font,
   // which lets columns line up perfectly on phone screens.
