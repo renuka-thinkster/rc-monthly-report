@@ -2580,18 +2580,21 @@ function ensureIncentiveMonth(m){
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
   const days = num(monthDays) || 30;
-  const calc = num(monthTotalIncentive) * num(emp.pct) / 100;   // Total × emp% ÷ 100
-  const perDay = days > 0 ? calc / days : 0;
+  const calc = Math.round(num(monthTotalIncentive) * num(emp.pct) / 100);   // Total × emp% ÷ 100
+  const perDayRaw = days > 0 ? calc / days : 0;                             // keep full precision here
+  const perDay = Math.round(perDayRaw);                                     // shown / exported as a whole ₹
   const presentDays = Math.max(0, days - num(emp.leaveDays));
-  const computedActual = perDay * presentDays;
+  // Pro-rate from the UNROUNDED per-day rate, then round once at the end, so
+  // rounding never compounds across the month.
+  const computedActual = Math.round(perDayRaw * presentDays);
   const hasOverride = emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined;
-  const actualIncentive = hasOverride ? num(emp.actualOverride) : computedActual;
+  const actualIncentive = hasOverride ? Math.round(num(emp.actualOverride)) : computedActual;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
   let final;
   if (emp.absent) final = 0;
-  else if (hasFix) final = num(emp.fixIncentive);
+  else if (hasFix) final = Math.round(num(emp.fixIncentive));
   else final = actualIncentive;
-  return { calc, perDay, presentDays, computedActual, actualIncentive, final, hasFix, hasOverride };
+  return { calc, perDay, presentDays, computedActual, actualIncentive, final: Math.round(final), hasFix, hasOverride };
 }
 // Is the incentive sheet editable for a given field type? "creator" | "manager"
 function incentiveCanEdit(mData, fieldType){
