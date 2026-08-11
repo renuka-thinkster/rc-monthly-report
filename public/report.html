@@ -1558,12 +1558,21 @@ function _persistData(){
     data.incentiveRoles = (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" };
     data.vendorSettings = (state.auth && state.auth.vendorPayout)   || { approverPhone:"" };
   } catch(e){ console.error('state passthrough failed', e); }
-  return fetch('/api/data', {
+  const body = JSON.stringify({ data });
+  // BROWSER LIMIT: fetch(..., {keepalive:true}) rejects bodies over ~64KB.
+  // Our full-state payload can easily exceed that (e.g. after copying a
+  // month of employees), and the save then fails instantly with a network
+  // error. So keepalive is only used when the body actually fits — for
+  // larger payloads a normal fetch is sent, and the visibilitychange /
+  // pagehide flush fires early enough for it to complete.
+  const KEEPALIVE_MAX = 60000;   // stay safely under the 64KB cap
+  const opts = {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data }),
-    keepalive: true
-  }).then(async (r) => {
+    body
+  };
+  if (body.length <= KEEPALIVE_MAX) opts.keepalive = true;
+  return fetch('/api/data', opts).then(async (r) => {
     if (r.status === 401){ _saveFailed = true; setSaveState("failed"); topRedirectLogin(); return; }
     if (!r.ok){
       const t = await r.text().catch(()=> '');
