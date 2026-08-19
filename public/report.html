@@ -413,7 +413,7 @@
           <label class="small"><input type="checkbox" data-hs="cafe"/> Café</label>
           <label class="small"><input type="checkbox" data-hs="rcExpress"/> RC Express</label>
           <label class="small"><input type="checkbox" data-hs="truck"/> Truck</label>
-          <label class="small"><input type="checkbox" data-hs="tcs"/> TCS</label>
+          <label class="small"><input type="checkbox" data-hs="tcs"/> RC2</label>
           <label class="small"><input type="checkbox" data-hs="rcf"/> RCF</label>
         </span>
         <span class="small" style="margin-left:auto" id="dailyCountInfo"></span>
@@ -430,7 +430,7 @@
               <th colspan="4" data-store="cafe">Café</th>
               <th colspan="3" data-store="rcExpress">RC Express</th>
               <th colspan="3" data-store="truck">Truck</th>
-              <th colspan="3" data-store="tcs">TCS</th>
+              <th colspan="3" data-store="tcs">RC2</th>
               <th colspan="3" data-store="rcf">RCF</th>
               <th rowspan="2">All Total</th>
               <th rowspan="2">Δ vs Target</th>
@@ -440,7 +440,7 @@
               <th data-store="cafe">UPI</th><th data-store="cafe">Online</th><th data-store="cafe">Cash</th><th data-store="cafe">Total</th>
               <th data-store="rcExpress">UPI</th><th data-store="rcExpress">Cash</th><th data-store="rcExpress">Total</th>
               <th data-store="truck">UPI</th><th data-store="truck">Cash</th><th data-store="truck">Total</th>
-              <th data-store="tcs">TCS-1</th><th data-store="tcs">TCS-2</th><th data-store="tcs">Total</th>
+              <th data-store="tcs">RC2-1</th><th data-store="tcs">RC2-2</th><th data-store="tcs">Total</th>
               <th data-store="rcf">UPI</th><th data-store="rcf">Cash</th><th data-store="rcf">Total</th>
             </tr>
           </thead>
@@ -1150,7 +1150,7 @@ function addYear(){
 
 /* ----- Daily Sales model ----- */
 const DAILY_UNITS = ["cafe","rcExpress","truck","tcs","rcf"];
-const DAILY_UNIT_LABELS = { cafe:"Café", rcExpress:"RC Express", truck:"Truck", tcs:"TCS", rcf:"RCF" };
+const DAILY_UNIT_LABELS = { cafe:"Café", rcExpress:"RC Express", truck:"Truck", tcs:"RC2", rcf:"RCF" };
 function blankDailyEntry(dateStr){
   return {
     date: dateStr || "",
@@ -2136,7 +2136,7 @@ function renderTodaySection(){
     { key:"cafe",      label:"Café",       v: t.cafe },
     { key:"rcExpress", label:"RC Express", v: t.rcExpress },
     { key:"truck",     label:"Truck",      v: t.truck },
-    { key:"tcs",       label:"TCS",        v: t.tcs },
+    { key:"tcs",       label:"RC2",        v: t.tcs },
     { key:"rcf",       label:"RCF",        v: t.rcf }
   ].filter(u => !hidden.includes(u.key));
   unitsEl.innerHTML = units.map(u =>
@@ -2150,7 +2150,7 @@ function renderTodaySection(){
   const missedLabel = missed > 0 ? "Missed vs Target" : "Above Target by";
   const missedCls = missed > 0 ? "badge-bad" : "badge-good";
   const missedVal = Math.abs(missed);
-  const labelMap = {cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"TCS",rcf:"RCF"};
+  const labelMap = {cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"RC2",rcf:"RCF"};
   const hiddenLabels = hidden.map(k => labelMap[k]).filter(Boolean);
   const exclNote = hiddenLabels.length
     ? `Excludes ${hiddenLabels.join(", ")} (hidden by user)`
@@ -4359,7 +4359,7 @@ function buildSummaryText(m){
       if (visible("cafe"))      txt += row("Café",       t.cafe)      + "\n";
       if (visible("rcExpress")) txt += row("RC Express", t.rcExpress) + "\n";
       if (visible("truck"))     txt += row("Truck",      t.truck)     + "\n";
-      if (visible("tcs"))       txt += row("TCS",        t.tcs)       + "\n";
+      if (visible("tcs"))       txt += row("RC2",        t.tcs)       + "\n";
       if (visible("rcf"))       txt += row("RCF",        t.rcf)       + "\n";
       txt += sep + "\n";
       // Total = sum of VISIBLE main-set stores (Café + RC Express + Truck + TCS),
@@ -4375,7 +4375,7 @@ function buildSummaryText(m){
         txt += row("Target",   tgt) + "\n";
         txt += row("Gap " + (diff>=0?"+":"-"), Math.abs(diff)) + "  " + (diff>=0?"🟢":"🔴") + "\n";
       }
-      const hiddenLabels = hidden.map(k => ({cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"TCS",rcf:"RCF"})[k]).filter(Boolean);
+      const hiddenLabels = hidden.map(k => ({cafe:"Café",rcExpress:"RC Express",truck:"Truck",tcs:"RC2",rcf:"RCF"})[k]).filter(Boolean);
       const note = hiddenLabels.length
         ? `_*excludes ${hiddenLabels.join(", ")} — hidden by user_`
         : `_*excl. RCF — matches sheet_`;
