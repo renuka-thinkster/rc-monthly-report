@@ -2594,41 +2594,29 @@ function ensureIncentiveMonth(m){
 //   Actual Incentive     = Per Day × Present Days  (admin can override/round in-place)
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
-  // ── HOW AN INCENTIVE IS WORKED OUT ───────────────────────────────
-  //   Amount        = the employee's "Actual Incentive" (falls back to the
-  //                   sheet's Total Incentive when that cell is empty)
-  //   Calculated    = Amount × employee % ÷ 100
-  //   Per Day       = Calculated ÷ Days in month
-  //   Present Days  = Days in month − Leave Days
-  //   Incentive     = Per Day × Present Days
-  //
-  //   e.g. Actual Incentive 50,000 · 2% · 30-day month · 2 days leave
-  //        Calculated = 50,000 × 2 ÷ 100 = 1,000.00
-  //        Per Day    = 1,000 ÷ 30       =    33.33   (exact 33.333333…)
-  //        Incentive  = 33.333333… × 28  =   933.33
-  //
-  //   Full precision is carried through and only rounded to 2 decimals for
-  //   display, so per-day rounding never compounds across the month.
-  //   "Fix Incentive" (if typed) replaces the whole calculation, but Leave
-  //   Days are still deducted from it.
+  // ── HOW AN INCENTIVE IS WORKED OUT (TEMP — client requested, Sep 2026) ──
+  //   Incentive = Actual Incentive, directly. No % multiply, no leave-day
+  //   proration. "Fix Incentive" (if typed) still overrides everything.
+  //   Calculated / Per Day / Present Days below are kept as reference-only
+  //   display columns — they no longer feed into the final Incentive.
   const r2 = v => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
   const days = num(monthDays) || 30;
   const typed = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
     ? num(emp.actualOverride) : null;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
-  // The amount the % is applied to.
+  // The amount the % is applied to (reference only now).
   const base = (typed !== null) ? typed : num(monthTotalIncentive);
   const calcRaw = hasFix ? num(emp.fixIncentive) : (base * num(emp.pct) / 100);
   const calc = r2(calcRaw);
-  const perDayRaw = days > 0 ? calcRaw / days : 0;      // full precision
+  const perDayRaw = days > 0 ? calcRaw / days : 0;
   const perDay = r2(perDayRaw);
   const presentDays = Math.max(0, days - num(emp.leaveDays));
-  const computedActual = r2(perDayRaw * presentDays);
+  // Incentive = Actual Incentive directly (Fix Incentive overrides if set).
+  const computedActual = hasFix ? r2(num(emp.fixIncentive)) : r2(base);
   const hasOverride = typed !== null;
   const actualIncentive = computedActual;
   // A figure typed straight into the Incentive column wins over everything.
   const hasFinal = emp.finalOverride !== "" && emp.finalOverride !== null && emp.finalOverride !== undefined;
-  // "Absent" is a marker only — the deduction comes from Leave Days.
   const final = hasFinal ? r2(num(emp.finalOverride)) : computedActual;
   return { base, calc, calcRaw, perDay, perDayRaw, presentDays, computedActual,
            actualIncentive, final, hasFix, hasOverride, hasFinal };
