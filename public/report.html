@@ -2593,34 +2593,35 @@ function ensureIncentiveMonth(m){
 //   Present Days         = days in month − Leave Days
 //   Actual Incentive     = Per Day × Present Days  (admin can override/round in-place)
 //   Final Incentive      = Absent → 0 · else Fix Incentive (if set) · else Actual Incentive
+
 function incentiveCalc(emp, monthDays, monthTotalIncentive){
-  // ── HOW AN INCENTIVE IS WORKED OUT (TEMP — client requested, Sep 2026) ──
-  //   Incentive = Actual Incentive, directly. No % multiply, no leave-day
-  //   proration. "Fix Incentive" (if typed) still overrides everything.
-  //   Calculated / Per Day / Present Days below are kept as reference-only
-  //   display columns — they no longer feed into the final Incentive.
+  // Typed Actual Incentive → Incentive = that number, directly (no %, no leave).
+  // No typed override (pool fallback) → unchanged from before: pool × % ÷ 100, leave-adjusted.
+  // Fix Incentive → whole-month figure, leave still deducted per day (unchanged).
   const r2 = v => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
   const days = num(monthDays) || 30;
   const typed = (emp.actualOverride !== "" && emp.actualOverride !== null && emp.actualOverride !== undefined)
     ? num(emp.actualOverride) : null;
+  const hasOverride = typed !== null;
   const hasFix = emp.fixIncentive !== "" && emp.fixIncentive !== null && emp.fixIncentive !== undefined;
-  // The amount the % is applied to (reference only now).
-  const base = (typed !== null) ? typed : num(monthTotalIncentive);
+  const base = hasOverride ? typed : num(monthTotalIncentive);
   const calcRaw = hasFix ? num(emp.fixIncentive) : (base * num(emp.pct) / 100);
   const calc = r2(calcRaw);
   const perDayRaw = days > 0 ? calcRaw / days : 0;
   const perDay = r2(perDayRaw);
   const presentDays = Math.max(0, days - num(emp.leaveDays));
-  // Incentive = Actual Incentive directly (Fix Incentive overrides if set).
-  const computedActual = hasFix ? r2(num(emp.fixIncentive)) : r2(base);
-  const hasOverride = typed !== null;
+  const poolShare = r2(perDayRaw * presentDays);
+  let computedActual;
+  if (hasFix)          computedActual = poolShare;
+  else if (hasOverride) computedActual = r2(typed);
+  else                  computedActual = poolShare;
   const actualIncentive = computedActual;
-  // A figure typed straight into the Incentive column wins over everything.
   const hasFinal = emp.finalOverride !== "" && emp.finalOverride !== null && emp.finalOverride !== undefined;
   const final = hasFinal ? r2(num(emp.finalOverride)) : computedActual;
   return { base, calc, calcRaw, perDay, perDayRaw, presentDays, computedActual,
            actualIncentive, final, hasFix, hasOverride, hasFinal };
 }
+  
 // Is the incentive sheet editable for a given field type? "creator" | "manager"
 function incentiveCanEdit(mData, fieldType){
   if (mData && mData.approved) return isIncentiveApprover();   // after approval — admin / designated approver only
