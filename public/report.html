@@ -524,6 +524,12 @@
         <label class="small" style="display:flex;align-items:center;gap:5px;font-weight:700">Total Incentive (pool ₹):
           <input type="text" inputmode="decimal" class="numinput" id="incTotalIncentive" style="width:110px"/>
         </label>
+        <label class="small" style="margin-left:10px;display:flex;align-items:center;gap:5px;font-weight:700">Profit (₹):
+          <input type="text" inputmode="decimal" class="numinput" id="incProfit" style="width:110px"/>
+        </label>
+        <label class="small" style="margin-left:10px;display:flex;align-items:center;gap:5px;font-weight:700">Target (₹):
+          <input type="text" inputmode="decimal" class="numinput" id="incTarget" style="width:110px"/>
+        </label>
         <label class="small" style="margin-left:10px">Days in month:
           <input type="text" inputmode="decimal" class="numinput" id="incDays" style="width:55px"/>
         </label>
@@ -531,7 +537,8 @@
           <input type="date" id="incDate" style="padding:5px 7px;font-size:12px"/>
         </label>
         <span id="incPoolWarn" class="small" style="color:#b91c1c;font-weight:700"></span>
-        <span id="incTotalPayout" class="small" style="margin-left:auto;font-weight:700"></span>
+        <span id="incProfitLossStatus" class="small" style="margin-left:auto;font-weight:700"></span>
+        <span id="incTotalPayout" class="small" style="margin-left:14px;font-weight:700"></span>
       </div>
       <div class="scroll-x">
         <table id="incTable">
@@ -2576,6 +2583,8 @@ function blankIncentiveMonth(m){
     approved: false, approvedBy: "", approvedAt: null,
     days: lastDay,
     totalIncentive: 0,   // shared pool for the whole month (manager enters)
+    profit: 0,           // actual profit made this month (manager enters)
+    target: 0,           // profit target for this month (manager enters)
     incentiveDate: `${state.currentYear}-${String(monthIdx+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`,
     employees: []
   };
@@ -2584,6 +2593,8 @@ function ensureIncentiveMonth(m){
   if (!state.incentive) state.incentive = {};
   if (!state.incentive[m]) state.incentive[m] = blankIncentiveMonth(m);
   if (state.incentive[m].totalIncentive === undefined) state.incentive[m].totalIncentive = 0;
+  if (state.incentive[m].profit === undefined) state.incentive[m].profit = 0;
+  if (state.incentive[m].target === undefined) state.incentive[m].target = 0;
   return state.incentive[m];
 }
 // Per-employee incentive calculation.
@@ -2782,6 +2793,31 @@ function renderIncentive(){
     poolWarn.innerHTML = (num(mData.totalIncentive) > 0 || anyTyped)
       ? ""
       : "⚠️ Enter an Actual Incentive amount per employee (or a Total Incentive here as the default).";
+  }
+  // Profit vs Target — manager enters both; we just show whether the month is in profit or loss.
+  const profitInp = document.getElementById("incProfit");
+  if (profitInp){
+    profitInp.value = mData.profit;
+    profitInp.disabled = !canManager;
+    profitInp.oninput = e => { mData.profit = num(e.target.value); saveAll(true); };
+  }
+  const targetInp = document.getElementById("incTarget");
+  if (targetInp){
+    targetInp.value = mData.target;
+    targetInp.disabled = !canManager;
+    targetInp.oninput = e => { mData.target = num(e.target.value); saveAll(true); };
+  }
+  const plEl = document.getElementById("incProfitLossStatus");
+  if (plEl){
+    const profit = num(mData.profit), target = num(mData.target);
+    if (profit === 0 && target === 0){
+      plEl.innerHTML = "";
+    } else {
+      const diff = profit - target;
+      plEl.innerHTML = diff >= 0
+        ? `<span style="color:#16a34a">✅ In Profit by ${fmt(diff)}</span>`
+        : `<span style="color:#dc2626">🔴 In Loss by ${fmt(Math.abs(diff))}</span>`;
+    }
   }
   // Days + date inputs
   const daysInp = document.getElementById("incDays");
