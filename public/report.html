@@ -415,6 +415,7 @@
           <label class="small"><input type="checkbox" data-hs="truck"/> Truck</label>
           <label class="small"><input type="checkbox" data-hs="tcs"/> RC2</label>
           <label class="small"><input type="checkbox" data-hs="rcf"/> RCF</label>
+          <span id="dailyHideCustom"></span>
         </span>
         <span class="small" style="margin-left:auto" id="dailyCountInfo"></span>
       </div>
@@ -424,7 +425,7 @@
       <div class="scroll-x">
         <table id="dailyTable">
           <thead>
-            <tr>
+            <tr id="dailyHeadTop">
               <th rowspan="2" class="col-date">Date</th>
               <th rowspan="2">Day</th>
               <th colspan="4" data-store="cafe">Café</th>
@@ -432,11 +433,11 @@
               <th colspan="3" data-store="truck">Truck</th>
               <th colspan="3" data-store="tcs">RC2</th>
               <th colspan="3" data-store="rcf">RCF</th>
-              <th rowspan="2">All Total</th>
+              <th rowspan="2" data-alltotal="1">All Total</th>
               <th rowspan="2">Δ vs Target</th>
               <th rowspan="2" class="col-act"></th>
             </tr>
-            <tr>
+            <tr id="dailyHeadSub">
               <th data-store="cafe">UPI</th><th data-store="cafe">Online</th><th data-store="cafe">Cash</th><th data-store="cafe">Total</th>
               <th data-store="rcExpress">UPI</th><th data-store="rcExpress">Cash</th><th data-store="rcExpress">Total</th>
               <th data-store="truck">UPI</th><th data-store="truck">Cash</th><th data-store="truck">Total</th>
@@ -1166,6 +1167,11 @@ function blankDailyEntry(dateStr){
     truck: {upi:0, cash:0},
     tcs: {t1:0, t2:0},
     rcf: {upi:0, cash:0},
+    // Money for sites added via "＋ Add Site", keyed by site name:
+    //   custom: { "New Branch": { upi: 0, cash: 0 } }
+    // Deliberately NOT part of the 15-column legacy array — that shape is
+    // fixed. The full-state passthrough in _persistData() persists this.
+    custom: {},
     locked: false
   };
 }
@@ -1548,6 +1554,40 @@ function setSaveState(st){
 // True while anything is still un-persisted.
 function hasUnsavedWork(){ return _dirty || _saveFailed || !!_saveTimer; }
 
+// ── Store registry ──────────────────────────────────────────────────────
+// A flat, position-free list of every store, written on each save so other
+// apps (RC360) can read the store list without knowing the 15-column layout.
+// Adding a store here is the ONLY place it needs adding.
+function buildStoreRegistry(){
+  const hidden = (state.daily && Array.isArray(state.daily.hiddenStores)) ? state.daily.hiddenStores : [];
+  const out = DAILY_UNITS.map(k => ({
+    key: k, name: DAILY_UNIT_LABELS[k] || k, kind: "builtin", active: hidden.indexOf(k) === -1
+  }));
+  customSiteNames().forEach(nm => out.push({
+    key: nm, name: nm, kind: "custom", active: hidden.indexOf(customHideKey(nm)) === -1
+  }));
+  return out;
+}
+// Sparse per-day takings for custom sites only — the built-in stores are
+// already in the 15-column `daily` arrays, so they are not duplicated here.
+//   customDaily["2026-10-05"] = { "New Branch": 12000 }
+function buildCustomDaily(){
+  const out = {};
+  const names = customSiteNames();
+  if (!names.length) return out;
+  const unit = (state.units && state.units[state.currentUnit]) || {};
+  Object.keys(unit.years || {}).forEach(y => {
+    const ents = (unit.years[y] && unit.years[y].daily && unit.years[y].daily.entries) || [];
+    ents.forEach(e => {
+      if (!e || !e.date || !e.custom) return;
+      const row = {};
+      names.forEach(nm => { const v = customDayTotal(e, nm); if (v) row[nm] = v; });
+      if (Object.keys(row).length) out[e.date] = row;
+    });
+  });
+  return out;
+}
+
 function _persistData(){
   _saveTimer = null;
   // Legacy "store" projection — kept so the DB shape never changes.
@@ -1564,6 +1604,8 @@ function _persistData(){
     data.editMode       = !!state.editMode;
     data.incentiveRoles = (state.auth && state.auth.incentiveRoles) || { approver:"", creator:"" };
     data.vendorSettings = (state.auth && state.auth.vendorPayout)   || { approverPhone:"" };
+    data.storeRegistry  = buildStoreRegistry();
+    data.customDaily    = buildCustomDaily();
   } catch(e){ console.error('state passthrough failed', e); }
   const body = JSON.stringify({ data });
   // BROWSER LIMIT: fetch(..., {keepalive:true}) rejects bodies over ~64KB.
@@ -2145,7 +2187,9 @@ function renderTodaySection(){
     { key:"truck",     label:"Truck",      v: t.truck },
     { key:"tcs",       label:"RC2",        v: t.tcs },
     { key:"rcf",       label:"RCF",        v: t.rcf }
-  ].filter(u => !hidden.includes(u.key));
+  ].concat(customSiteNames().map(nm => ({
+      key: customHideKey(nm), label: nm, v: (t.custom && t.custom[nm]) || 0
+  }))).filter(u => !hidden.includes(u.key));
   unitsEl.innerHTML = units.map(u =>
     `<div class="today-unit-card">
        <div class="today-unit-label">${u.label}</div>
@@ -2386,9 +2430,33 @@ const STORE_TO_DAILY_UNIT = {
   "TCS":        "tcs",
   "Events":     null
 };
+// ── Custom sites ────────────────────────────────────────────────────────
+// Sites created with "＋ Add Site". They already appear in Sales ① and
+// Target ⑤; these helpers give them a Daily Sales column too, so accounts
+// can enter them and the figures flow through to every derived sheet.
+function customSiteNames(){
+  const unit = state.units && state.currentUnit && state.units[state.currentUnit];
+  const list = (unit && Array.isArray(unit.customSites)) ? unit.customSites : [];
+  return list.filter(s => s && !STORES.includes(s));
+}
+function isCustomSite(name){ return customSiteNames().indexOf(name) !== -1; }
+// Hidden-store keys are namespaced so a site called "truck" can never collide
+// with the built-in truck column.
+function customHideKey(name){ return "cs:" + name; }
+// Lazily create and return one day's money object for one custom site.
+function customCell(e, name){
+  if (!e.custom || typeof e.custom !== "object") e.custom = {};
+  if (!e.custom[name] || typeof e.custom[name] !== "object") e.custom[name] = { upi:0, cash:0 };
+  return e.custom[name];
+}
+function customDayTotal(e, name){
+  const c = e && e.custom && e.custom[name];
+  return c ? num(c.upi) + num(c.cash) : 0;
+}
 // True when a Sales/Targets store is hidden because its Daily Sales counterpart was hidden.
 function isSiteHidden(storeName){
   if (!state.daily || !Array.isArray(state.daily.hiddenStores)) return false;
+  if (isCustomSite(storeName)) return state.daily.hiddenStores.includes(customHideKey(storeName));
   const dailyKey = STORE_TO_DAILY_UNIT[storeName];
   return !!dailyKey && state.daily.hiddenStores.includes(dailyKey);
 }
@@ -2434,14 +2502,18 @@ function addCustomSite(){
     if (state.rc && state.rc.sales && state.rc.sales[m]) state.rc.sales[m][trimmed] = blankSalesRow();
     if (state.rc && state.rc.tgt   && state.rc.tgt[m])   state.rc.tgt[m][trimmed]   = { target:0, workingDays:30 };
   });
+  // Give the new site a cell on every existing day so it can be entered at once.
+  ((state.daily && state.daily.entries) || []).forEach(e => customCell(e, trimmed));
   saveAll(true);
   try { renderSales(); } catch(e){}
   try { renderTargets && renderTargets(); } catch(e){}
-  flash(`✓ Site "${trimmed}" added — appears in Sales & Targets`);
+  try { renderDaily && renderDaily(); } catch(e){}
+  try { renderDashboard && renderDashboard(); } catch(e){}
+  flash(`✓ Site "${trimmed}" added — enter it in Daily Sales; Sales, Targets & Summary follow`);
 }
 function removeCustomSite(name){
   if (!isManagerRole()){ alert("Only admin / manager can remove a site."); return; }
-  if (!confirm(`Remove the custom site "${name}"?\n\nIts entered Sales & Targets data will be deleted for every month. This cannot be undone.`)) return;
+  if (!confirm(`Remove the custom site "${name}"?\n\nIts Daily Sales entries, and its Sales & Targets data, will be deleted for every month. This cannot be undone.`)) return;
   const unit = state.units[state.currentUnit];
   if (!unit || !Array.isArray(unit.customSites)) return;
   unit.customSites = unit.customSites.filter(c => c !== name);
@@ -2449,17 +2521,24 @@ function removeCustomSite(name){
     if (state.rc && state.rc.sales && state.rc.sales[m]) delete state.rc.sales[m][name];
     if (state.rc && state.rc.tgt   && state.rc.tgt[m])   delete state.rc.tgt[m][name];
   });
+  ((state.daily && state.daily.entries) || []).forEach(e => { if (e.custom) delete e.custom[name]; });
+  if (state.daily && Array.isArray(state.daily.hiddenStores)){
+    state.daily.hiddenStores = state.daily.hiddenStores.filter(k => k !== customHideKey(name));
+  }
   saveAll(true);
   try { renderSales(); } catch(e){}
   try { renderTargets && renderTargets(); } catch(e){}
+  try { renderDaily && renderDaily(); } catch(e){}
+  try { renderDashboard && renderDashboard(); } catch(e){}
   flash(`✓ Site "${name}" removed`);
 }
 // Sum of daily-unit sales for a given store within a given month, optionally filtered to a cutoff date.
 // "Incremental" — grows as each new daily entry is added.
 function storeAchievedFromDaily(m, s, asOfDate){
   if (!state.daily || !state.daily.entries) return 0;
+  const custom = isCustomSite(s);
   const unit = STORE_TO_DAILY_UNIT[s];
-  if (!unit) return storeRowTotal(m, s);   // Events fallback → monthly Sales total
+  if (!custom && !unit) return storeRowTotal(m, s);   // Events fallback → monthly Sales total
   const monthIdx = MONTHS.indexOf(m);
   let total = 0;
   state.daily.entries.forEach(e => {
@@ -2468,7 +2547,8 @@ function storeAchievedFromDaily(m, s, asOfDate){
     const eYear  = +e.date.slice(0,4);
     const eMIdx  = +e.date.slice(5,7) - 1;
     if (eYear !== state.currentYear || eMIdx !== monthIdx) return;
-    if (unit === "cafe")           total += num(e.cafe.upi) + num(e.cafe.online) + num(e.cafe.cash);
+    if (custom)                    total += customDayTotal(e, s);
+    else if (unit === "cafe")      total += num(e.cafe.upi) + num(e.cafe.online) + num(e.cafe.cash);
     else if (unit === "rcExpress") total += num(e.rcExpress.upi) + num(e.rcExpress.cash);
     else if (unit === "truck")     total += num(e.truck.upi) + num(e.truck.cash);
     else if (unit === "tcs")       total += num(e.tcs.t1) + num(e.tcs.t2);
@@ -3012,8 +3092,10 @@ function syncSalesFromDaily(){
   if (!state.rc || !state.rc.sales) return;
   MONTHS.forEach(m => {
     if (daysEnteredInMonth(m) === 0) return;      // no daily data → skip month
-    STORES.forEach(s => {
-      if (STORE_TO_DAILY_UNIT[s] === null) return; // Events: no daily source
+    // Built-in stores AND custom sites — hidden ones included, so a store
+    // that is un-hidden later is never showing a stale figure.
+    STORES.concat(customSiteNames()).forEach(s => {
+      if (!isCustomSite(s) && STORE_TO_DAILY_UNIT[s] === null) return; // Events: no daily source
       if (!state.rc.sales[m] || !state.rc.sales[m][s]) return;
       state.rc.sales[m][s].dineAmt = storeAchievedFromDaily(m, s);
     });
@@ -3996,7 +4078,9 @@ function yearTotals(year){
     // Sales (Sales-node sub-total) ─ sum across stores
     let sales = 0;
     if (yd.rc && yd.rc.sales && yd.rc.sales[m]){
-      STORES.forEach(s => {
+      // effectiveStores() — not the fixed STORES list — so custom sites are
+      // counted and hidden sites are excluded, matching monthSalesTotal().
+      effectiveStores().forEach(s => {
         const x = yd.rc.sales[m][s];
         if (x) sales += num(x.dineAmt) + num(x.hdAmt) + num(x.creditAmt) + num(x.focAmt);
       });
@@ -4041,12 +4125,21 @@ function dailyEntryTotals(e){
   const hidden = (state.daily && Array.isArray(state.daily.hiddenStores))
                   ? state.daily.hiddenStores : [];
   const inAll = k => !hidden.includes(k);
-  const allMain  = (inAll("cafe")?c:0) + (inAll("rcExpress")?r:0) + (inAll("truck")?t:0) + (inAll("tcs")?tc:0);
+  // Custom sites count towards "All Total" exactly like the built-in stores.
+  const custom = {};
+  let csVisible = 0, csRaw = 0;
+  customSiteNames().forEach(nm => {
+    const v = customDayTotal(e, nm);
+    custom[nm] = v;
+    csRaw += v;
+    if (inAll(customHideKey(nm))) csVisible += v;
+  });
+  const allMain  = (inAll("cafe")?c:0) + (inAll("rcExpress")?r:0) + (inAll("truck")?t:0) + (inAll("tcs")?tc:0) + csVisible;
   const grand    = allMain + (inAll("rcf")?f:0);
   return {
-    cafe:c, rcExpress:r, truck:t, tcs:tc, rcf:f,
+    cafe:c, rcExpress:r, truck:t, tcs:tc, rcf:f, custom,
     all: allMain, grand,
-    allRaw: c+r+t+tc, grandRaw: c+r+t+tc+f
+    allRaw: c+r+t+tc+csRaw, grandRaw: c+r+t+tc+f+csRaw
   };
 }
 function dayName(dateStr){
@@ -4151,6 +4244,50 @@ function renderDaily(){
   if (tbl){
     STORE_KEYS.forEach(k => tbl.classList.toggle("hide-" + k, isHidden(k)));
   }
+
+  // ── Custom sites ──────────────────────────────────────────────────────
+  // Built-in columns exist in the static markup and are hidden with CSS.
+  // Custom columns are injected here, and hidden ones are simply not drawn.
+  const csAll = customSiteNames();
+  const csShown = csAll.filter(nm => !isHidden(customHideKey(nm)));
+  const headTop = document.getElementById("dailyHeadTop");
+  const headSub = document.getElementById("dailyHeadSub");
+  if (headTop && headSub){
+    headTop.querySelectorAll("th[data-cshdr]").forEach(el => el.remove());
+    headSub.querySelectorAll("th[data-cshdr]").forEach(el => el.remove());
+    const anchor = headTop.querySelector("th[data-alltotal]");
+    csShown.forEach(nm => {
+      const th = document.createElement("th");
+      th.colSpan = 3; th.setAttribute("data-cshdr", nm); th.textContent = nm;
+      headTop.insertBefore(th, anchor);
+      ["UPI","Cash","Total"].forEach(lbl => {
+        const t2 = document.createElement("th");
+        t2.setAttribute("data-cshdr", nm); t2.textContent = lbl;
+        headSub.appendChild(t2);
+      });
+    });
+  }
+  // Hide-toggles for the custom sites, rebuilt each render.
+  const csWrap = document.getElementById("dailyHideCustom");
+  if (csWrap){
+    csWrap.innerHTML = csAll.map(nm =>
+      `<label class="small"><input type="checkbox" data-hscs="${String(nm).replace(/"/g,'&quot;')}"/> ${String(nm).replace(/</g,'&lt;')}</label>`
+    ).join(" ");
+    csWrap.querySelectorAll('input[type="checkbox"][data-hscs]').forEach(cb => {
+      const key = customHideKey(cb.dataset.hscs);
+      cb.checked = isHidden(key);
+      cb.addEventListener("change", () => {
+        d.hiddenStores = d.hiddenStores.filter(x => x !== key);
+        if (cb.checked) d.hiddenStores.push(key);
+        saveAll(true);
+        renderDaily();
+        try { renderSales();     } catch(e){}
+        try { renderInventory && renderInventory(); } catch(e){}
+        try { renderTargets && renderTargets(); } catch(e){}
+        try { renderDashboard && renderDashboard(); } catch(e){}
+      });
+    });
+  }
   // Sync the hide-store checkboxes with state
   document.querySelectorAll('#dailyHideStoresWrap input[type="checkbox"][data-hs]').forEach(cb => {
     cb.checked = isHidden(cb.dataset.hs);
@@ -4197,6 +4334,8 @@ function renderDaily(){
   let sT1=0,sT2=0,sTcsT=0;
   let sRcfU=0,sRcfC=0,sRcfT=0;
   let sAll=0;
+  const sCs = {};                       // per custom site: {u, c, t}
+  csShown.forEach(nm => sCs[nm] = {u:0, c:0, t:0});
   d.entries.forEach((e, idx) => {
     const _em = e.date ? +e.date.split("-")[1] : 0;
     const _ey = e.date ? +e.date.split("-")[0] : 0;
@@ -4212,16 +4351,34 @@ function renderDaily(){
     if (!isHidden("truck")){ sTrU+=num(e.truck.upi); sTrC+=num(e.truck.cash); sTrT+=t.truck; }
     if (!isHidden("tcs")){ sT1+=num(e.tcs.t1); sT2+=num(e.tcs.t2); sTcsT+=t.tcs; }
     if (!isHidden("rcf")){ sRcfU+=num(e.rcf.upi); sRcfC+=num(e.rcf.cash); sRcfT+=t.rcf; }
+    // Custom-site cells for this row, plus their running sub-totals.
+    let rowCs = 0;
+    csShown.forEach(nm => {
+      const cell = customCell(e, nm);
+      const ct = num(cell.upi) + num(cell.cash);
+      sCs[nm].u += num(cell.upi); sCs[nm].c += num(cell.cash); sCs[nm].t += ct;
+      rowCs += ct;
+    });
     // Per-row "All Total" excludes any hidden store.
     const rowAll = (isHidden("cafe")?0:t.cafe)
                  + (isHidden("rcExpress")?0:t.rcExpress)
                  + (isHidden("truck")?0:t.truck)
-                 + (isHidden("tcs")?0:t.tcs);
+                 + (isHidden("tcs")?0:t.tcs)
+                 + rowCs;
     sAll += rowAll;
     const delta = rowAll - num(d.perDayTarget);
     const cls = delta>=0 ? "badge-good" : "badge-bad";
     const locked = !!e.locked;
     const dis = locked ? "disabled" : "";
+    // Built here rather than above because it needs `dis`.
+    let csCells = "";
+    csShown.forEach(nm => {
+      const cell = customCell(e, nm);
+      const esc = String(nm).replace(/"/g,'&quot;');
+      csCells += `<td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-cs="${esc}" data-f="upi" value="${cell.upi}" ${dis}/></td>`
+               + `<td><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-cs="${esc}" data-f="cash" value="${cell.cash}" ${dis}/></td>`
+               + `<td class="derived-cell"><b>${fmt0(num(cell.upi)+num(cell.cash))}</b></td>`;
+    });
     const isToday = e.date === today;
     const isPast = e.date && e.date < today;
     // Edit button visibility rules:
@@ -4260,6 +4417,7 @@ function renderDaily(){
       <td data-store="rcf"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="upi" value="${e.rcf.upi}" ${dis}/></td>
       <td data-store="rcf"><input type="text" inputmode="decimal" class="numinput" data-idx="${idx}" data-u="rcf" data-f="cash" value="${e.rcf.cash}" ${dis}/></td>
       <td data-store="rcf" class="derived-cell"><b>${fmt0(t.rcf)}</b></td>
+      ${csCells}
       <td class="derived-cell"><b>${fmt(rowAll)}</b></td>
       <td class="${cls}"><b>${delta>=0?"+":""}${fmt0(delta)}</b></td>
       <td class="col-act">${actionBtn}</td>
@@ -4273,6 +4431,7 @@ function renderDaily(){
       const u = ev.target.dataset.u;
       const f = ev.target.dataset.f;
       if (f === "date") state.daily.entries[idx].date = ev.target.value;
+      else if (ev.target.dataset.cs) customCell(state.daily.entries[idx], ev.target.dataset.cs)[f] = num(ev.target.value);
       else state.daily.entries[idx][u][f] = num(ev.target.value);
       saveAll(true);
     });
@@ -4285,6 +4444,7 @@ function renderDaily(){
     <td data-store="truck">${fmt0(sTrU)}</td><td data-store="truck">${fmt0(sTrC)}</td><td data-store="truck"><b>${fmt(sTrT)}</b></td>
     <td data-store="tcs">${fmt0(sT1)}</td><td data-store="tcs">${fmt0(sT2)}</td><td data-store="tcs"><b>${fmt(sTcsT)}</b></td>
     <td data-store="rcf">${fmt0(sRcfU)}</td><td data-store="rcf">${fmt0(sRcfC)}</td><td data-store="rcf"><b>${fmt(sRcfT)}</b></td>
+    ${csShown.map(nm => `<td>${fmt0(sCs[nm].u)}</td><td>${fmt0(sCs[nm].c)}</td><td><b>${fmt(sCs[nm].t)}</b></td>`).join("")}
     <td><b>${fmt(sAll)}</b></td>
     <td colspan="2" class="small">Target/day: ${fmt(d.perDayTarget)}</td>`;
   // Avg row
@@ -4296,6 +4456,7 @@ function renderDaily(){
     <td data-store="truck">${fmt0(sTrU/n)}</td><td data-store="truck">${fmt0(sTrC/n)}</td><td data-store="truck">${fmt(sTrT/n)}</td>
     <td data-store="tcs">${fmt0(sT1/n)}</td><td data-store="tcs">${fmt0(sT2/n)}</td><td data-store="tcs">${fmt(sTcsT/n)}</td>
     <td data-store="rcf">${fmt0(sRcfU/n)}</td><td data-store="rcf">${fmt0(sRcfC/n)}</td><td data-store="rcf">${fmt(sRcfT/n)}</td>
+    ${csShown.map(nm => `<td>${fmt0(sCs[nm].u/n)}</td><td>${fmt0(sCs[nm].c/n)}</td><td>${fmt(sCs[nm].t/n)}</td>`).join("")}
     <td><b>${fmt(sAll/n)}</b></td>
     <td colspan="2"></td>`;
   const info = document.getElementById("dailyCountInfo");
@@ -4392,13 +4553,18 @@ function buildSummaryText(m){
       if (visible("truck"))     txt += row("Truck",      t.truck)     + "\n";
       if (visible("tcs"))       txt += row("RC2",        t.tcs)       + "\n";
       if (visible("rcf"))       txt += row("RCF",        t.rcf)       + "\n";
+      customSiteNames().forEach(nm => {
+        if (visible(customHideKey(nm))) txt += row(nm, (t.custom && t.custom[nm]) || 0) + "\n";
+      });
       txt += sep + "\n";
       // Total = sum of VISIBLE main-set stores (Café + RC Express + Truck + TCS),
       // matching the sheet behaviour (RCF tracked separately).
       const visibleTotal = (visible("cafe")?t.cafe:0)
                          + (visible("rcExpress")?t.rcExpress:0)
                          + (visible("truck")?t.truck:0)
-                         + (visible("tcs")?t.tcs:0);
+                         + (visible("tcs")?t.tcs:0)
+                         + customSiteNames().reduce((a,nm) =>
+                             a + (visible(customHideKey(nm)) ? ((t.custom && t.custom[nm]) || 0) : 0), 0);
       txt += row("Total*",     visibleTotal)       + "\n";
       const tgt = num(state.daily.perDayTarget);
       if (tgt > 0){
