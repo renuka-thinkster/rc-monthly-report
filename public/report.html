@@ -916,6 +916,7 @@ function copyPreviousTarget(){
     return;
   }
   if (!confirm(`Copy ${prev.m} ${prev.year} targets → ${m} ${state.currentYear}?\n\nThis overwrites any existing target & working-days values for ${m}.`)) return;
+  if (!state.rc.tgt[m]) state.rc.tgt[m] = {};
   STORES.forEach(s => {
     state.rc.tgt[m][s] = {
       target: num(srcTgt[s] && srcTgt[s].target) || 0,
@@ -1125,8 +1126,30 @@ function makeYearData(y){
     incentive: {}
   };
 }
+// A save only carries the months that had data, so a month nobody has
+// touched can be missing from rc.sales / rc.inv / rc.pur / rc.tgt / mn
+// entirely. Selecting such a month used to throw (Target tab, Jul-Dec).
+// Backfill the keys so every sheet can always render.
+function ensureMonthKeys(yd){
+  if (!yd) return;
+  if (!yd.rc) yd.rc = blankRC();
+  const r = yd.rc;
+  if (!r.sales) r.sales = {};
+  if (!r.inv)   r.inv   = {};
+  if (!r.pur)   r.pur   = {};
+  if (!r.tgt)   r.tgt   = {};
+  if (!yd.mn)   yd.mn   = {};
+  MONTHS.forEach(m => {
+    if (!r.sales[m]) r.sales[m] = {};
+    if (!r.inv[m])   r.inv[m]   = {};
+    if (r.pur[m] === undefined || r.pur[m] === null) r.pur[m] = 0;
+    if (!r.tgt[m])   r.tgt[m]   = {};
+    if (!yd.mn[m])   yd.mn[m]   = { staffFood:0, dump:0, maintenance:0, otherIncome:0 };
+  });
+}
 function bindYear(y){
   if (!state.years[y]) state.years[y] = makeYearData(y);
+  ensureMonthKeys(state.years[y]);
   if (!state.years[y].locks) state.years[y].locks = {};
   if (!state.years[y].products) state.years[y].products = [];
   if (!state.years[y].consumption) state.years[y].consumption = {};
@@ -1696,11 +1719,13 @@ const pct = (a,b)=> num(b)? ((num(a)*100)/num(b)).toFixed(2)+"%" : "—";
 /* ====================================================================== */
 // SALES — derived from RC sheet ①
 function storeRowTotal(m,s){
-  const x = state.rc.sales[m][s];
+  const x = (state.rc.sales[m] || {})[s];
+  if (!x) return 0;
   return num(x.dineAmt)+num(x.hdAmt)+num(x.creditAmt)+num(x.focAmt);
 }
 function storeRowOrders(m,s){
-  const x = state.rc.sales[m][s];
+  const x = (state.rc.sales[m] || {})[s];
+  if (!x) return 0;
   return num(x.dineOrders)+num(x.hdOrders);
 }
 function monthSalesTotal(m){
