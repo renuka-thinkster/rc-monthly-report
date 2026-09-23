@@ -280,7 +280,9 @@
       <h3 class="section-title">① Total Sales Monthly Report</h3>
       <div class="help">
         Per month per store: enter <b>Order Count</b> (Dining, Home Delivery) and <b>Amount</b> (Dining, Home Delivery, Credit Sales, FOC).
-        Total Orders, Avg/day, Row Total and Month Sub-Total are auto-computed.
+        Total Orders, Avg/day, Row Total and Month Sub-Total are auto-computed.<br/>
+        <b>Dining Amount</b> is filled in automatically for any month that has <b>Daily Sales</b> entries — it shows as a read-only
+        blue cell there, and is changed by editing that day in the Daily Sales tab. Months with no daily entries stay typeable.
       </div>
       <div class="legend">
         <span><i style="background:#fef3c7"></i>Manual entry</span>
@@ -1799,6 +1801,10 @@ function renderSales(){
       const avg = days? (totalOrders/days).toFixed(2) : "0";
       const trCls = locked ? "row-locked-month" : "";
       const isCustom = customSet.has(s);
+      // In any month that has Daily Sales entries, Dining Amount is driven by
+      // Daily Sales. Rendering an editable box there is a trap: typing into it
+      // is silently overwritten on the next refresh. Show the figure instead.
+      const fromDaily = daysEnteredInMonth(m) > 0 && (isCustom || STORE_TO_DAILY_UNIT[s] != null);
       const labelExtra = isCustom
         ? ` <button class="btn btn-danger" style="padding:1px 5px;font-size:9px;margin-left:4px" onclick="removeCustomSite('${s.replace(/'/g, "\\'")}')" title="Remove this custom site">×</button>`
         : "";
@@ -1808,7 +1814,9 @@ function renderSales(){
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.hdOrders}" data-m="${m}" data-s="${s}" data-f="hdOrders" ${dis}/></td>
         <td class="derived-cell">${fmt0(totalOrders)}</td>
         <td class="derived-cell">${avg}</td>
-        <td><input type="text" inputmode="decimal" class="numinput" value="${x.dineAmt}" data-m="${m}" data-s="${s}" data-f="dineAmt" ${dis}/></td>
+        ${fromDaily
+          ? `<td class="derived-cell" title="Comes from Daily Sales — enter it on the Daily Sales tab">${fmt0(x.dineAmt)}</td>`
+          : `<td><input type="text" inputmode="decimal" class="numinput" value="${x.dineAmt}" data-m="${m}" data-s="${s}" data-f="dineAmt" ${dis}/></td>`}
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.hdAmt}" data-m="${m}" data-s="${s}" data-f="hdAmt" ${dis}/></td>
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.creditAmt}" data-m="${m}" data-s="${s}" data-f="creditAmt" ${dis}/></td>
         <td><input type="text" inputmode="decimal" class="numinput" value="${x.focAmt}" data-m="${m}" data-s="${s}" data-f="focAmt" ${dis}/></td>
